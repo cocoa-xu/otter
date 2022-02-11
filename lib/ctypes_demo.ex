@@ -11,8 +11,13 @@ defmodule Ctypes do
   @default_mode :RTLD_NOW
 
   # specify shared library name and load mode for a single function
-  @load_from "libSystem.B.dylib"
+  @load_from (case :os.type() do
+                {:unix, :darwin} -> "libSystem.B.dylib"
+                {:unix, _} -> "libc.so"
+                {:win32, _} -> raise "Windows is not supported yet"
+              end)
   @load_mode :RTLD_NOW
+  # decc stands for `declare C` (function)
   decc sin(:f64, f64)
 
   # or using module level default shared library name and load mode

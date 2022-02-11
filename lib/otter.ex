@@ -46,6 +46,9 @@ defmodule Otter do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end
 
+  @doc """
+  decc stands for `declare C` (function)
+  """
   defmacro decc(fun) do
     {name, args} = Macro.decompose_call(fun)
     [_ | func_args] = args

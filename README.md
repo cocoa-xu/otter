@@ -20,6 +20,7 @@ defmodule Ctypes do
                 {:win32, _} -> raise "Windows is not supported yet"
               end)
   @load_mode :RTLD_NOW
+  # decc stands for `declare C` (function)
   decc sin(:f64, f64)
 
   # or using module level default shared library name and load mode
