@@ -4,7 +4,6 @@ defmodule Otter do
   """
 
   @mode_to_int %{
-    :RTLD_SELF => 0,
     :RTLD_LAZY => 0x00001,
     :RTLD_NOW => 0x00002,
     :RTLD_BINDING_MASK => 0x00003,
@@ -48,8 +47,7 @@ defmodule Otter do
 
   defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
-    [_ | func_args] = args
-    {_name, _, [return_type | arg_types]} = fun
+    [return_type | func_args] = args
 
     func_arg_types =
       func_args
@@ -62,33 +60,50 @@ defmodule Otter do
               |> Atom.to_string()
               |> then(&"#{&1}_#{index}")
               |> String.to_atom()
-           {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
+
+            {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
+
           [{arg_name, line, _}, {arg_type, _, _}] ->
             arg_name =
               arg_name
               |> Atom.to_string()
               |> then(&"#{&1}_#{index}")
               |> String.to_atom()
+
             {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
         end
       end)
+
     func_args =
       func_arg_types
       |> Enum.map(&elem(&1, 0))
+
     arg_types =
       func_arg_types
       |> Enum.map(&elem(&1, 1))
 
     quote do
-      @load_from Module.get_attribute(__MODULE__, :load_from, Module.get_attribute(__MODULE__, :default_from))
-      @load_mode Module.get_attribute(__MODULE__, :load_mode, Module.get_attribute(__MODULE__, :default_mode))
+      @load_from Module.get_attribute(
+                   __MODULE__,
+                   :load_from,
+                   Module.get_attribute(__MODULE__, :default_from)
+                 )
+      @load_mode Module.get_attribute(
+                   __MODULE__,
+                   :load_mode,
+                   Module.get_attribute(__MODULE__, :default_mode)
+                 )
       def unquote(:"#{name}")(unquote_splicing(func_args)) do
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
         return_type = unquote(return_type)
 
         with {:ok, image} <- Otter.dlopen(@load_from, @load_mode),
              {:ok, symbol} <- Otter.dlsym(image, func_name) do
-          Otter.invoke(symbol, return_type, Enum.zip([unquote_splicing(func_args)], unquote(arg_types)))
+          Otter.invoke(
+            symbol,
+            return_type,
+            Enum.zip([unquote_splicing(func_args)], unquote(arg_types))
+          )
         else
           {:error, reason} -> raise reason
         end
