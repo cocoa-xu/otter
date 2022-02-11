@@ -15,6 +15,9 @@ defmodule Otter do
     :RTLD_NODELETE => 0x01000
   }
 
+  @doc """
+  open
+  """
   def dlopen(nil, mode) when is_atom(mode) do
     dlopen("RTLD_SELF", Map.get(@mode_to_int, mode))
   end
@@ -53,21 +56,17 @@ defmodule Otter do
       |> Enum.map(&"#{&1}")
 
     quote do
+      @load_from Module.get_attribute(__MODULE__, :load_from, nil)
+      @load_mode Module.get_attribute(__MODULE__, :load_mode, nil)
       def unquote(:"#{name}")(unquote_splicing(func_args)) do
-        # todo: get load_from and load_mode by Module.get_attribute
-        # @load_from "/usr/lib/libSystem.B.dylib"
-        # @load_mode :RTLD_NOW
-        load_from = "/usr/lib/libSystem.B.dylib"
-        load_mode = :RTLD_NOW
-
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
         return_type = unquote(return_type)
 
-        with {:ok, image} <- dlopen(load_from, load_mode),
+        with {:ok, image} <- dlopen(@load_from, @load_mode),
              {:ok, symbol} <- dlsym(image, func_name) do
           Otter.invoke(symbol, return_type, Enum.zip([unquote_splicing(func_args)], unquote(arg_types)))
         else
-          {:error, reason} -> raise RuntimeError, reason
+          {:error, reason} -> raise reason
         end
       end
     end
