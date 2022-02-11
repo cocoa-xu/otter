@@ -205,6 +205,18 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     OtterSymbol * symbol_res;
     std::string return_type;
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
+    static std::map<std::string, ffi_type *> str2ffi_type = {
+        {"u8", &ffi_type_uint8},
+        {"u16", &ffi_type_uint16},
+        {"u32", &ffi_type_uint32},
+        {"u64", &ffi_type_uint64},
+        {"s8", &ffi_type_sint8},
+        {"s16", &ffi_type_sint16},
+        {"s32", &ffi_type_sint32},
+        {"s64", &ffi_type_sint64},
+        {"f32", &ffi_type_float},
+        {"f64", &ffi_type_double},
+    };
 
     if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res) &&
         erlang::nif::get_atom(env, argv[1], return_type) &&
@@ -217,33 +229,66 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             ffi_type * ffi_return_type;
             void * rc = malloc(sizeof(ffi_arg));
             void * null_ptr = nullptr;
+            size_t ptrs_cap = 32;
+            size_t ptrs_next = 0;
+            void ** ptrs = (void **)malloc(sizeof(void *) * ptrs_cap);
 
             int ready = 1;
             for (size_t i = 0; i < args_with_type.size(); ++i) {
                 auto& p = args_with_type[i];
+                std::string null_c_ptr;
                 if (p.second == "c_ptr") {
                     ErlNifBinary binary;
+                    int64_t ptr;
                     if (enif_inspect_binary(env, p.first, &binary)) {
                         args[i] = &ffi_type_pointer;
                         values[i] = &binary.data;
+                    } else if (erlang::nif::get_atom(env, p.first, null_c_ptr) && (null_c_ptr == "NULL" || null_c_ptr == "nil")) {
+                        args[i] = &ffi_type_pointer;
+                        values[i] = &null_ptr;
+                    } else if (erlang::nif::get_sint64(env, p.first, &ptr)) {
+                        args[i] = &ffi_type_pointer;
+                        ptrs[ptrs_next] = (void *)(int64_t *)(ptr);
+                        values[i] = &ptrs[ptrs_next];
+                        ptrs_next += 1;
+                        if (ptrs_next == ptrs_cap) {
+                            // todo: resize
+                        }
                     } else {
                         ready = 0;
                         break;
                     }
-                } else if (p.second == "i32") {
-                    int i32;
-                    if (erlang::nif::get(env, p.first, &i32)) {
-                        args[i] = &ffi_type_sint32;
-                        values[i] = &i32;
+                } else if ((p.second == "s8") || (p.second == "s16") || (p.second == "s32")) {
+                    int sint;
+                    if (erlang::nif::get_sint(env, p.first, &sint)) {
+                        args[i] = str2ffi_type[p.second];
+                        values[i] = &sint;
                     } else {
                         ready = 0;
+                        printf("[debug] cannot get value for %s\r\n", p.second.c_str());
                         break;
                     }
-                } else if (p.second == "f64") {
+                } else if ((p.second == "u8") || (p.second == "u16") || (p.second == "u32")) {
+                    unsigned int uint;
+                    if (erlang::nif::get_uint(env, p.first, &uint)) {
+                        args[i] = str2ffi_type[p.second];
+                        values[i] = &uint;
+                    } else {
+                        ready = 0;
+                        printf("[debug] cannot get value for %s\r\n", p.second.c_str());
+                        break;
+                    }
+                } else if ((p.second == "f32") || (p.second == "f64")) {
                     double f64;
+                    float f32;
                     if (erlang::nif::get(env, p.first, &f64)) {
-                        args[i] = &ffi_type_double;
-                        values[i] = &f64;
+                        args[i] = str2ffi_type[p.second];
+                        if (p.second == "f32") {
+                            f32 = (float)f64;
+                            values[i] = &f32;
+                        } else {
+                            values[i] = &f64;
+                        }
                     } else {
                         ready = 0;
                         break;
@@ -323,7 +368,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             } else if (return_type == "f64") {
                 ret = enif_make_double(env, *(double *)rc);
             } else if (return_type == "c_ptr") {
-                ret = enif_make_uint64(env, (uint64_t)(*(uint64_t **)rc));
+                ret = enif_make_uint64(env, (uint64_t)(*(uint64_t *)rc));
             } else {
                 printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
                 ret = erlang::nif::ok(env);
@@ -332,6 +377,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             enif_free((void *)args);
             enif_free((void *)values);
             free((void *)rc);
+            free((void *)ptrs);
             return ret;
         } else {
             return erlang::nif::error(env, "resource has an invalid handle");

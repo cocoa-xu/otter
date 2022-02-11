@@ -1,5 +1,5 @@
 defmodule Ctypes do
-  import Otter
+  import Otter, except: [{:dlopen, 2}, {:dlsym, 2}]
 
   # module level default shared library name/path
   @default_from (case :os.type() do
@@ -17,11 +17,12 @@ defmodule Ctypes do
                 {:win32, _} -> raise "Windows is not supported yet"
               end)
   @load_mode :RTLD_NOW
-  # decc stands for `declare C` (function)
-  decc sin(:f64, f64)
+  extern sin(:f64, f64)
 
   # or using module level default shared library name and load mode
-  decc puts(:s32, c_ptr)
-  decc printf(:s32, c_ptr)
-  decc printf(:s32, c_ptr, va_args)
+  extern puts(:s32, c_ptr)
+  extern printf(:s32, c_ptr)
+  extern printf(:s32, c_ptr, va_args)
+  extern dlopen(:c_ptr, c_ptr, s32)
+  extern dlsym(:c_ptr, c_ptr, c_ptr)
 end

@@ -20,13 +20,14 @@ defmodule Ctypes do
                 {:win32, _} -> raise "Windows is not supported yet"
               end)
   @load_mode :RTLD_NOW
-  # decc stands for `declare C` (function)
-  decc sin(:f64, f64)
+  extern sin(:f64, f64)
 
   # or using module level default shared library name and load mode
-  decc puts(:s32, c_ptr)
-  decc printf(:s32, c_ptr)
-  decc printf(:s32, c_ptr, va_args)
+  extern puts(:s32, c_ptr)
+  extern printf(:s32, c_ptr)
+  extern printf(:s32, c_ptr, va_args)
+  extern dlopen(:c_ptr, c_ptr, s32)
+  extern dlsym(:c_ptr, c_ptr, c_ptr)
 end
 
 iex(1)> Ctypes.puts("hello \r")
@@ -37,6 +38,8 @@ world!
 9
 iex(3)> Ctypes.sin(3.1415926535)
 8.979318433952318e-11
+iex(4)> handle = Ctypes.dlopen("/usr/lib/libSystem.B.dylib", 2)
+iex(5)> Ctypes.dlsym(handle, "dlsym")
 ```
 
 ## Installation

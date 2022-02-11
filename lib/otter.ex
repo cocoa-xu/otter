@@ -46,10 +46,7 @@ defmodule Otter do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end
 
-  @doc """
-  decc stands for `declare C` (function)
-  """
-  defmacro decc(fun) do
+  defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
     [_ | func_args] = args
     {_name, _, [return_type | arg_types]} = fun
@@ -58,6 +55,18 @@ defmodule Otter do
       |> Enum.map(&elem(&1, 0))
       |> Enum.map(&"#{&1}")
 
+    func_args =
+      func_args
+      |> Enum.with_index(fn element, index -> {element, index} end)
+      |> Enum.map(fn {{arg_name, line, extra}, index} ->
+        arg_name =
+          arg_name
+          |> Atom.to_string()
+          |> then(&"#{&1}_#{index}")
+          |> String.to_atom()
+        {arg_name, line, extra}
+      end)
+
     quote do
       @load_from Module.get_attribute(__MODULE__, :load_from, Module.get_attribute(__MODULE__, :default_from))
       @load_mode Module.get_attribute(__MODULE__, :load_mode, Module.get_attribute(__MODULE__, :default_mode))
@@ -65,8 +74,8 @@ defmodule Otter do
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
         return_type = unquote(return_type)
 
-        with {:ok, image} <- dlopen(@load_from, @load_mode),
-             {:ok, symbol} <- dlsym(image, func_name) do
+        with {:ok, image} <- Otter.dlopen(@load_from, @load_mode),
+             {:ok, symbol} <- Otter.dlsym(image, func_name) do
           Otter.invoke(symbol, return_type, Enum.zip([unquote_splicing(func_args)], unquote(arg_types)))
         else
           {:error, reason} -> raise reason

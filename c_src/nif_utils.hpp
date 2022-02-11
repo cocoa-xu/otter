@@ -72,18 +72,72 @@ namespace erlang
     }
 
     // Numeric types
+      int get_sint(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
+      {
+          if (enif_get_int(env, term, reinterpret_cast<int *>(var))) {
+              return 1;
+          } else {
+              ErlNifSInt64 s64;
+              if (enif_get_int64(env, term, reinterpret_cast<ErlNifSInt64 *>(&s64))) {
+                  *var = (int)(s64);
+                  return 1;
+              }
+          }
+          return 0;
+      }
 
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
-    {
-      return enif_get_int(env, term,
-                          reinterpret_cast<int *>(var));
-    }
+      int get_sint64(ErlNifEnv *env, ERL_NIF_TERM term, int64_t *var)
+      {
+          return enif_get_int64(env, term, reinterpret_cast<ErlNifSInt64 *>(var));
+      }
 
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, int64_t *var)
-    {
-      return enif_get_int64(env, term,
-                            reinterpret_cast<ErlNifSInt64 *>(var));
-    }
+      int get_uint(ErlNifEnv *env, ERL_NIF_TERM term, unsigned int *var)
+      {
+          if (enif_get_uint(env, term, reinterpret_cast<unsigned int *>(var))) {
+              return 1;
+          } else {
+              int sint;
+              if (enif_get_int(env, term, reinterpret_cast<int *>(&sint))) {
+                  *var = sint;
+                  return 1;
+              }
+          }
+          return 0;
+      }
+
+      int get_uint64(ErlNifEnv *env, ERL_NIF_TERM term, uint64_t *var)
+      {
+          return enif_get_uint64(env, term, reinterpret_cast<ErlNifUInt64 *>(var));
+      }
+
+      int get(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
+      {
+          return enif_get_int(env, term, reinterpret_cast<int *>(var));
+      }
+
+      int get(ErlNifEnv *env, ERL_NIF_TERM term, unsigned int *var)
+      {
+          if (enif_get_uint(env, term, reinterpret_cast<unsigned int *>(var))) {
+              return 1;
+          } else {
+              int sint;
+              if (enif_get_int(env, term, reinterpret_cast<int *>(&sint))) {
+                  *var = sint;
+                  return 1;
+              }
+          }
+          return 0;
+      }
+
+      int get(ErlNifEnv *env, ERL_NIF_TERM term, uint64_t *var)
+      {
+          return enif_get_uint64(env, term, reinterpret_cast<ErlNifUInt64 *>(var));
+      }
+
+      int get(ErlNifEnv *env, ERL_NIF_TERM term, int64_t *var)
+      {
+          return enif_get_int64(env, term, reinterpret_cast<ErlNifSInt64 *>(var));
+      }
 
     int get(ErlNifEnv *env, ERL_NIF_TERM term, double *var)
     {
