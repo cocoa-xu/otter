@@ -3,8 +3,6 @@ defmodule Otter do
   Documentation for `Otter`.
   """
 
-  def otter_table_name, do: :otter
-
   @mode_to_int %{
     :RTLD_SELF => 0,
     :RTLD_LAZY => 0x00001,
@@ -65,33 +63,12 @@ defmodule Otter do
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
         return_type = unquote(return_type)
 
-        if Enum.member?(:ets.all(), Otter.otter_table_name) == false do
-          :ets.new(Otter.otter_table_name, [:public, :named_table])
+        with {:ok, image} <- dlopen(load_from, load_mode),
+             {:ok, symbol} <- dlsym(image, func_name) do
+          Otter.invoke(symbol, return_type, Enum.zip([unquote_splicing(func_args)], unquote(arg_types)))
+        else
+          {:error, reason} -> raise RuntimeError, reason
         end
-
-        image =
-          with [] <- :ets.lookup(Otter.otter_table_name, load_from) do
-            {:ok, image} = dlopen(load_from, load_mode)
-            :ets.insert(Otter.otter_table_name, [{load_from, image}])
-            image
-          else
-            [{^load_from, image}|_] -> image
-            {:error, reason} -> raise RuntimeError, reason
-          end
-        true = is_reference(image)
-
-        image_function = "#{load_from}.#{func_name}"
-        symbol =
-          with [] <- :ets.lookup(Otter.otter_table_name, image_function),
-               {:dlsym, {:ok, symbol}} <- {:dlsym, dlsym(image, func_name)} do
-            :ets.insert(Otter.otter_table_name, [{image_function, symbol}])
-            symbol
-          else
-            [{^image_function, symbol}|_] -> symbol
-            {:dlsym, {:error, reason}} -> IO.puts("1: #{IO.inspect(reason)}")
-            {:error, reason} -> IO.puts("2: #{IO.inspect(reason)}")
-          end
-        Otter.invoke(symbol, return_type, Enum.zip([unquote_splicing(func_args)], unquote(arg_types)))
       end
     end
   end
