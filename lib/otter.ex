@@ -56,8 +56,8 @@ defmodule Otter do
       |> Enum.map(&"#{&1}")
 
     quote do
-      @load_from Module.get_attribute(__MODULE__, :load_from, nil)
-      @load_mode Module.get_attribute(__MODULE__, :load_mode, nil)
+      @load_from Module.get_attribute(__MODULE__, :load_from, Module.get_attribute(__MODULE__, :default_from))
+      @load_mode Module.get_attribute(__MODULE__, :load_mode, Module.get_attribute(__MODULE__, :default_mode))
       def unquote(:"#{name}")(unquote_splicing(func_args)) do
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
         return_type = unquote(return_type)
