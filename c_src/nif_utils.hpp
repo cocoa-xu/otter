@@ -256,10 +256,12 @@ namespace erlang
       while (enif_get_list_cell(env, list, &head, &tail))
       {
         std::string elem;
-        if (!get_atom(env, head, elem))
-          return 0;
-        var.push_back(elem);
-        list = tail;
+        if (get_atom(env, head, elem) || get(env, head, elem)) {
+            var.push_back(elem);
+            list = tail;
+        } else {
+            return 0;
+        }
       }
       return 1;
     }
