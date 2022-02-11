@@ -28,6 +28,9 @@ defmodule Ctypes do
   extern printf(:s32, c_ptr, va_args)
   extern dlopen(:c_ptr, c_ptr, s32)
   extern dlsym(:c_ptr, c_ptr, c_ptr)
+
+  # explict mark argument name and type
+  extern cos(:f64, theta :: f64)
 end
 
 iex(1)> Ctypes.puts("hello \r")
@@ -38,8 +41,14 @@ world!
 9
 iex(3)> Ctypes.sin(3.1415926535)
 8.979318433952318e-11
-iex(4)> handle = Ctypes.dlopen("/usr/lib/libSystem.B.dylib", 2)
-iex(5)> Ctypes.dlsym(handle, "dlsym")
+iex(4)> Ctypes.cos(0)
+1.0
+iex(5)> Ctypes.sin(0.0)
+1.0
+iex(6)> handle = Ctypes.dlopen("/usr/lib/libSystem.B.dylib", 2)
+20152781936
+iex(7)> dlsym_addr = Ctypes.dlsym(handle, "dlsym")
+7023526352
 ```
 
 ## Installation

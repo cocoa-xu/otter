@@ -25,4 +25,7 @@ defmodule Ctypes do
   extern printf(:s32, c_ptr, va_args)
   extern dlopen(:c_ptr, c_ptr, s32)
   extern dlsym(:c_ptr, c_ptr, c_ptr)
+
+  # explict mark argument name and type
+  extern cos(:f64, theta :: f64)
 end

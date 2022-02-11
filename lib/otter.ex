@@ -50,22 +50,34 @@ defmodule Otter do
     {name, args} = Macro.decompose_call(fun)
     [_ | func_args] = args
     {_name, _, [return_type | arg_types]} = fun
-    arg_types =
-      arg_types
-      |> Enum.map(&elem(&1, 0))
-      |> Enum.map(&"#{&1}")
 
-    func_args =
+    func_arg_types =
       func_args
       |> Enum.with_index(fn element, index -> {element, index} end)
       |> Enum.map(fn {{arg_name, line, extra}, index} ->
-        arg_name =
-          arg_name
-          |> Atom.to_string()
-          |> then(&"#{&1}_#{index}")
-          |> String.to_atom()
-        {arg_name, line, extra}
+        case extra do
+          nil ->
+            unique_arg_name =
+              arg_name
+              |> Atom.to_string()
+              |> then(&"#{&1}_#{index}")
+              |> String.to_atom()
+           {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
+          [{arg_name, line, _}, {arg_type, _, _}] ->
+            arg_name =
+              arg_name
+              |> Atom.to_string()
+              |> then(&"#{&1}_#{index}")
+              |> String.to_atom()
+            {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
+        end
       end)
+    func_args =
+      func_arg_types
+      |> Enum.map(&elem(&1, 0))
+    arg_types =
+      func_arg_types
+      |> Enum.map(&elem(&1, 1))
 
     quote do
       @load_from Module.get_attribute(__MODULE__, :load_from, Module.get_attribute(__MODULE__, :default_from))

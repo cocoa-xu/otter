@@ -281,7 +281,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 } else if ((p.second == "f32") || (p.second == "f64")) {
                     double f64;
                     float f32;
-                    if (erlang::nif::get(env, p.first, &f64)) {
+                    if (erlang::nif::get_f64(env, p.first, &f64)) {
                         args[i] = str2ffi_type[p.second];
                         if (p.second == "f32") {
                             f32 = (float)f64;

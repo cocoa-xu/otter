@@ -110,6 +110,32 @@ namespace erlang
           return enif_get_uint64(env, term, reinterpret_cast<ErlNifUInt64 *>(var));
       }
 
+      int get_f64(ErlNifEnv *env, ERL_NIF_TERM term, double *var)
+      {
+          if (enif_get_double(env, term, var)) {
+              return 1;
+          } else {
+              uint64_t u64;
+              int64_t s64;
+              int s32;
+              unsigned int u32;
+              if (get_uint64(env, term, &u64)) {
+                  *var = (double)u64;
+                  return 1;
+              } else if (get_sint64(env, term, &s64)) {
+                  *var = (double)s64;
+                  return 1;
+              } else if (get_uint(env, term, &u32)) {
+                  *var = (double)u32;
+                  return 1;
+              } else if (get_sint(env, term, &s32)) {
+                  *var = (double)s32;
+                  return 1;
+              }
+          }
+          return 0;
+      }
+
       int get(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
       {
           return enif_get_int(env, term, reinterpret_cast<int *>(var));
