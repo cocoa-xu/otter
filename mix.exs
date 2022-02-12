@@ -6,7 +6,7 @@ defmodule Otter.MixProject do
     [
       app: :otter,
       version: "0.1.0",
-      elixir: "~> 1.13",
+      elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       compilers: [:elixir_make] ++ Mix.compilers(),
       description: description(),
