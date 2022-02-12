@@ -199,27 +199,77 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
     return 1;
 }
 
+static std::map<std::string, ffi_type *> str2ffi_type = {
+    {"u8", &ffi_type_uint8},
+    {"bool", &ffi_type_uint8},
+    {"u16", &ffi_type_uint16},
+    {"u32", &ffi_type_uint32},
+    {"u64", &ffi_type_uint64},
+    {"s8", &ffi_type_sint8},
+    {"s16", &ffi_type_sint16},
+    {"s32", &ffi_type_sint32},
+    {"s64", &ffi_type_sint64},
+    {"f32", &ffi_type_float},
+    {"f64", &ffi_type_double},
+};
+
+static bool get_struct_return_type(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term,
+    ffi_type& ffi_struct_type,
+    std::vector<ffi_type*>& struct_return_type_field_types
+) {
+    int arity = -1;
+    const ERL_NIF_TERM * array;
+    std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
+    bool is_size_2_tuple = enif_get_tuple(env, struct_return_type_term, &arity, &array) && arity == 2;
+    std::string struct_atom;
+    erlang::nif::get_atom(env, array[0], struct_atom);
+    if (!is_size_2_tuple) {
+        return false;
+    }
+    if (!(struct_atom == "struct")) {
+        return false;
+    }
+    if (get_args_with_type(env, array[1], args_with_type)) {
+        ffi_struct_type.size = args_with_type.size();
+        ffi_struct_type.alignment = 0;
+        ffi_struct_type.type = FFI_TYPE_STRUCT;
+        struct_return_type_field_types.resize(args_with_type.size());
+        ffi_struct_type.elements = struct_return_type_field_types.data();
+        for (size_t i = 0; i < args_with_type.size(); ++i) {
+            auto& p = args_with_type[i];
+            if (p.second == "c_ptr") {
+                struct_return_type_field_types[i] = &ffi_type_pointer;
+            } else {
+                struct_return_type_field_types[i] = str2ffi_type[p.second];
+            }
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) return enif_make_badarg(env);
 
     OtterSymbol * symbol_res;
-    std::string return_type;
-    std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
-    static std::map<std::string, ffi_type *> str2ffi_type = {
-        {"u8", &ffi_type_uint8},
-        {"u16", &ffi_type_uint16},
-        {"u32", &ffi_type_uint32},
-        {"u64", &ffi_type_uint64},
-        {"s8", &ffi_type_sint8},
-        {"s16", &ffi_type_sint16},
-        {"s32", &ffi_type_sint32},
-        {"s64", &ffi_type_sint64},
-        {"f32", &ffi_type_float},
-        {"f64", &ffi_type_double},
-    };
 
+    bool has_struct_return_type = false;
+    std::string return_type;
+    ffi_type struct_return_type;
+    std::vector<ffi_type*> struct_return_type_field_types;
+
+    std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
+    if (erlang::nif::get_atom(env, argv[1], return_type)) {
+        has_struct_return_type = false;
+    }
+    else if (get_struct_return_type(env, argv[1], struct_return_type, struct_return_type_field_types)) {
+        has_struct_return_type = true;
+    }
+    else {
+        return erlang::nif::error(env, "fail to get return_type");
+    }
     if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res) &&
-        erlang::nif::get_atom(env, argv[1], return_type) &&
         get_args_with_type(env, argv[2], args_with_type)) {
         void * symbol = symbol_res->val;
         if (symbol != nullptr) {
@@ -302,8 +352,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     printf("[debug] todo: arg%zu, type: %s\r\n", i, p.second.c_str());
                 }
             }
-
-            if (return_type == "void") {
+            if (has_struct_return_type) {
+                ffi_return_type = &struct_return_type;
+            } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
             } else if (return_type == "u8") {
                 ffi_return_type = &ffi_type_uint8;
@@ -330,7 +381,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             } else if (return_type == "c_ptr") {
                 ffi_return_type = &ffi_type_pointer;
             } else {
-                printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
                 ready = 0;
             }
 
@@ -345,7 +395,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
 
             ERL_NIF_TERM ret;
-            if (return_type == "void") {
+            if (has_struct_return_type) {
+                printf("[debug] todo: return struct\r\n");
+                ret = erlang::nif::ok(env);
+            }
+            else if (return_type == "void") {
                 ret = erlang::nif::ok(env);
             } else if (return_type == "u8") {
                 ret = enif_make_uint(env, *(uint8_t *)rc);
