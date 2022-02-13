@@ -199,6 +199,7 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
     return 1;
 }
 
+// TODO: extract a function to prevent segfault
 static std::map<std::string, ffi_type *> str2ffi_type = {
     {"u8", &ffi_type_uint8},
     {"bool", &ffi_type_uint8},
