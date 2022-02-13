@@ -53,11 +53,11 @@ defmodule Otter do
   end
 
   defmodule CStruct do
-    defstruct fields: []
+    defstruct fields: [], id: nil
   end
 
-  def transform_type(%CStruct{fields: fields}) do
-    {:struct, fields}
+  def transform_type(%CStruct{fields: fields, id: id}) do
+    {:struct, id, fields}
   end
 
   def transform_type(name) when is_atom(name) do
@@ -151,7 +151,7 @@ defmodule Otter do
 
     quote do
       def unquote(:"#{name}")() do
-        struct(Otter.CStruct, fields: unquote(fields))
+        struct(Otter.CStruct, fields: unquote(fields), id: unquote(:"#{name}"))
       end
     end
   end

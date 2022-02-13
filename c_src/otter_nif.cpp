@@ -213,23 +213,63 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
     {"f64", &ffi_type_double},
 };
 
+void resource_dtor(ErlNifEnv*, void* obj)
+{
+    free(obj);
+}
+
+// NOTE: the basic idea here we register a resource type for each struct type, identified by struct_id.
+static ErlNifResourceType* register_ffi_struct_resource_type(ErlNifEnv *env, std::string& struct_id) {
+    return enif_open_resource_type(env, "Otter", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+        ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER),
+        nullptr
+    );
+}
+
+static std::map<std::string, ErlNifResourceType*> struct_resource_type_registry{};
+
+static ErlNifResourceType* get_ffi_struct_resource_type(ErlNifEnv *env, std::string& struct_id) {
+    auto it = struct_resource_type_registry.find(struct_id);
+    if (it == struct_resource_type_registry.end()) {
+        auto t = register_ffi_struct_resource_type(env, struct_id);
+        struct_resource_type_registry[struct_id] = t;
+        return t;
+    } else {
+        return it->second;
+    }
+}
+
+static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_type, ErlNifResourceType* resource_type, void* result) {
+    auto resource = enif_alloc_resource(resource_type, struct_type.size);
+    memcpy(resource, result, struct_type.size);
+    return enif_make_resource(env, resource);
+}
+
+bool get_ffi_struct_resource(ErlNifEnv *env, ERL_NIF_TERM term, ErlNifResourceType *type, void **objp, std::string& struct_id) {
+    return enif_get_resource(env, term, type, objp);
+}
+
 static bool get_struct_return_type(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term,
     ffi_type& ffi_struct_type,
-    std::vector<ffi_type*>& struct_return_type_field_types
+    std::vector<ffi_type*>& struct_return_type_field_types,
+    ErlNifResourceType* resource_type
 ) {
     int arity = -1;
     const ERL_NIF_TERM * array;
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
-    bool is_size_2_tuple = enif_get_tuple(env, struct_return_type_term, &arity, &array) && arity == 2;
+    bool is_size_correct_tuple = enif_get_tuple(env, struct_return_type_term, &arity, &array) && arity == 3;
     std::string struct_atom;
+    std::string struct_id;
     erlang::nif::get_atom(env, array[0], struct_atom);
-    if (!is_size_2_tuple) {
+    erlang::nif::get_atom(env, array[1], struct_id);
+    if (!is_size_correct_tuple) {
         return false;
     }
     if (!(struct_atom == "struct")) {
         return false;
     }
-    if (get_args_with_type(env, array[1], args_with_type)) {
+    resource_type = get_ffi_struct_resource_type(env, struct_id);
+    if (get_args_with_type(env, array[2], args_with_type)) {
         ffi_struct_type.size = args_with_type.size();
         ffi_struct_type.alignment = 0;
         ffi_struct_type.type = FFI_TYPE_STRUCT;
@@ -254,16 +294,18 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
     OtterSymbol * symbol_res;
 
+    // TODO: turn this into a struct/class
     bool has_struct_return_type = false;
     std::string return_type;
     ffi_type struct_return_type;
     std::vector<ffi_type*> struct_return_type_field_types;
+    ErlNifResourceType* struct_return_resource_type;
 
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
     if (erlang::nif::get_atom(env, argv[1], return_type)) {
         has_struct_return_type = false;
     }
-    else if (get_struct_return_type(env, argv[1], struct_return_type, struct_return_type_field_types)) {
+    else if (get_struct_return_type(env, argv[1], struct_return_type, struct_return_type_field_types, struct_return_resource_type)) {
         has_struct_return_type = true;
     }
     else {
@@ -396,8 +438,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
             ERL_NIF_TERM ret;
             if (has_struct_return_type) {
-                printf("[debug] todo: return struct\r\n");
-                ret = erlang::nif::ok(env);
+                ret = make_ffi_struct_resource(env, struct_return_type, struct_return_resource_type, rc);
             }
             else if (return_type == "void") {
                 ret = erlang::nif::ok(env);
