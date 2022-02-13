@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.18.0)
 project(otter DESCRIPTION "use this cmake to generate compiler db JSON file")
 
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_INSTALL_MESSAGE LAZY CACHE STRING "" FORCE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
