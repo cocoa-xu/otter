@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18.0)
 project(otter DESCRIPTION "use this cmake to generate compiler db JSON file")
 
 set(CMAKE_INSTALL_MESSAGE LAZY CACHE STRING "" FORCE)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 
 # Find ERTS
 find_program(ELIXIR_EXECUTABLE NAMES elixir REQUIRED)
@@ -40,11 +40,22 @@ message(STATUS "LIB_EI: ${LIB_EI}")
 add_library(erl_interface UNKNOWN IMPORTED ${LIB_EI})
 set_target_properties(erl_interface PROPERTIES IMPORTED_LOCATION ${LIB_EI})
 
+include(cmake/FindFFI.cmake)
+if (FFI_FOUND)
+  message(STATUS "FFI_INCLUDE_DIRS: ${FFI_INCLUDE_DIRS}")
+  message(STATUS "FFI_LIBRARIES: ${FFI_LIBRARIES}")
+  message(STATUS "HAVE_FFI_CALL: ${HAVE_FFI_CALL}")
+else()
+  message(FATAL_ERROR "FFI not found: ${FFI_FOUND}")
+endif()
+
 include_directories(${ERTS_INCLUDE_DIR})
 include_directories(${nifpp_SOURCE_DIR})
+include_directories(${FFI_INCLUDE_DIRS}/ffi)
 
 set(CMAKE_SHARED_LIBRARY_SUFFIX .so)
 
 add_library(otter_nif SHARED
     c_src/otter_nif.cpp
 )
+target_link_libraries(otter_nif FFI::ffi)
