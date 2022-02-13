@@ -253,7 +253,7 @@ bool get_ffi_struct_resource(ErlNifEnv *env, ERL_NIF_TERM term, ErlNifResourceTy
 static bool get_struct_return_type(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term,
     ffi_type& ffi_struct_type,
     std::vector<ffi_type*>& struct_return_type_field_types,
-    ErlNifResourceType* resource_type
+    ErlNifResourceType*& resource_type
 ) {
     int arity = -1;
     const ERL_NIF_TERM * array;
@@ -300,7 +300,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     std::string return_type;
     ffi_type struct_return_type;
     std::vector<ffi_type*> struct_return_type_field_types;
-    ErlNifResourceType* struct_return_resource_type;
+    ErlNifResourceType* struct_return_resource_type = nullptr;
 
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
     if (erlang::nif::get_atom(env, argv[1], return_type)) {
@@ -312,8 +312,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     else {
         return erlang::nif::error(env, "fail to get return_type");
     }
-    if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res) &&
-        get_args_with_type(env, argv[2], args_with_type)) {
+    if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res)) {
+        if (!get_args_with_type(env, argv[2], args_with_type)) return erlang::nif::error(env, "fail to get args_with_type");
         void * symbol = symbol_res->val;
         if (symbol != nullptr) {
             ffi_cif cif;
