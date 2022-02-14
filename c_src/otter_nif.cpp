@@ -306,9 +306,12 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
     if (wrapper_it != struct_type_wrapper_registry.end()) {
         return wrapper_it->second;
     }
-    FFIStructTypeWrapper wrapper;
+    FFIStructTypeWrapper wrapper_;
+    auto insert_it = struct_type_wrapper_registry.insert({struct_id, wrapper_});
+    if (!insert_it.second) return FFIStructTypeWrapper{};
+    auto& wrapper = insert_it.first->second;
     wrapper.struct_id = struct_id;
-    wrapper.resource_type = get_ffi_struct_resource_type(env, wrapper.struct_id);
+    wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
         for (size_t i = 0; i < args_with_type.size(); ++i) {
             auto& p = args_with_type[i];
@@ -318,12 +321,8 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
                 wrapper.field_types.push_back(str2ffi_type[p.second]);
             }
         }
-        auto insert_it = struct_type_wrapper_registry.insert({wrapper.struct_id, wrapper});
-        if (insert_it.second) {
-            // must call finalize() after insert(copy), to update elements' ptr
-            insert_it.first->second.finalize();
-            return insert_it.first->second;
-        }
+        wrapper.finalize();
+        return wrapper;
     }
     return FFIStructTypeWrapper{};
 }
@@ -441,6 +440,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 }
             }
             if (struct_return_type && struct_return_type.finalized) {
+                // struct_return_type.ffi_struct_type.elements = struct_return_type.field_types.data();
                 ffi_return_type = &struct_return_type.ffi_struct_type;
             } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
