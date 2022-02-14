@@ -282,12 +282,12 @@ FFIStructTypeWrapper::FFIStructTypeWrapper()
     ffi_struct_type.size = 0; // set by libffi, initialize it to zero
     ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
     ffi_struct_type.type = FFI_TYPE_STRUCT;
-    ffi_struct_type.elements = field_types.data();
     resource_type = nullptr;
 }
 
 void FFIStructTypeWrapper::finalize()
 {
+    ffi_struct_type.elements = field_types.data();
     finalized = true;
 }
 
@@ -312,17 +312,16 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
     wrapper.struct_id = struct_id;
     wrapper.resource_type = get_ffi_struct_resource_type(env, wrapper.struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
+        wrapper.field_types.reserve(args_with_type.size());
         for (size_t i = 0; i < args_with_type.size(); ++i) {
             auto& p = args_with_type[i];
             if (p.second == "c_ptr") {
-                wrapper.field_types.push_back(&ffi_type_pointer);
+                wrapper.field_types.emplace_back(&ffi_type_pointer);
             } else {
-                wrapper.field_types.push_back(str2ffi_type[p.second]);
+                wrapper.field_types.emplace_back(str2ffi_type[p.second]);
             }
         }
         wrapper.finalize();
-        std::cerr << "args_with_type.size() = " << args_with_type.size() << std::endl;
-        std::cerr << "wrapper.field_types.size() = " << wrapper.field_types.size() << std::endl;
         if (struct_type_wrapper_registry.insert({wrapper.struct_id, wrapper}).second) {
             return wrapper;
         }
@@ -478,9 +477,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
 
             ERL_NIF_TERM ret;
-            std::cerr << "ffi_return_type bool: " << !!struct_return_type << std::endl;
-            std::cerr << "ffi_return_type: " << struct_return_type.field_types.size() << std::endl;
-                std::cerr << "ffi_return_type: " << ffi_return_type->type << ", " << ffi_return_type->alignment << ", " << ffi_return_type->size << std::endl;
             if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
                 ffi_call(&cif, (void (*)())symbol, &rc, values);
             } else {
