@@ -77,7 +77,7 @@ defmodule Otter do
 
           struct_tuple =
             quote do
-              unquote(struct_name)() |> Otter.transform_type() |> IO.inspect()
+              unquote(struct_name)() |> Otter.transform_type()
             end
 
           {{unique_arg_name, line, nil}, struct_tuple}
@@ -125,7 +125,7 @@ defmodule Otter do
           Otter.invoke(
             symbol,
             return_type,
-            Enum.zip([unquote_splicing(func_args)], unquote(arg_types))
+            Enum.zip([unquote_splicing(func_args)], [unquote_splicing(arg_types)])
           )
         else
           {:error, reason} -> raise reason

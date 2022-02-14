@@ -2,6 +2,7 @@
 #include <erl_nif.h>
 #include <ffi.h>
 #include "nif_utils.hpp"
+#include <iostream>
 
 #ifdef __GNUC__
 #  pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -191,10 +192,11 @@ void resource_dtor(ErlNifEnv*, void* obj)
 
 // NOTE: the basic idea here we register a resource type for each struct type, identified by struct_id.
 static ErlNifResourceType* register_ffi_struct_resource_type(ErlNifEnv *env, std::string& struct_id) {
-    return enif_open_resource_type(env, "Otter", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+    auto resource_type = enif_open_resource_type(env, "Otter", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
         ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER),
         nullptr
     );
+    return resource_type;
 }
 
 static std::map<std::string, ErlNifResourceType*> struct_resource_type_registry{};
@@ -210,7 +212,7 @@ static ErlNifResourceType* get_ffi_struct_resource_type(ErlNifEnv *env, std::str
     }
 }
 
-static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_type, ErlNifResourceType* resource_type, void* result) {
+static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_type, ErlNifResourceType* resource_type, const void* result) {
     auto resource = enif_alloc_resource(resource_type, struct_type.size);
     memcpy(resource, result, struct_type.size);
     return enif_make_resource(env, resource);
@@ -278,8 +280,8 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
 FFIStructTypeWrapper::FFIStructTypeWrapper()
 {
     field_types = {};
-    ffi_struct_type.size = 0;
-    ffi_struct_type.alignment = 0;
+    ffi_struct_type.size = 0; // set by libffi, initialize it to zero
+    ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
     ffi_struct_type.type = FFI_TYPE_STRUCT;
     ffi_struct_type.elements = field_types.data();
     resource_type = nullptr;
@@ -287,7 +289,6 @@ FFIStructTypeWrapper::FFIStructTypeWrapper()
 
 void FFIStructTypeWrapper::finalize()
 {
-    ffi_struct_type.size = field_types.size();
     finalized = true;
 }
 
