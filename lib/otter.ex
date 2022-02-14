@@ -80,9 +80,6 @@ defmodule Otter do
               unquote(struct_name)() |> Otter.transform_type() |> IO.inspect()
             end
 
-          # struct_tuple =
-          #   {:struct, {{:., [], [{struct_name, line, []}, :fields]}, [no_parens: true], []}}
-
           {{unique_arg_name, line, nil}, struct_tuple}
 
         {{arg_name, line, extra}, index} ->
@@ -106,9 +103,7 @@ defmodule Otter do
       func_arg_types
       |> Enum.map(&elem(&1, 0))
 
-    arg_types =
-      func_arg_types
-      |> Enum.map(&elem(&1, 1))
+    arg_types = func_arg_types |> Enum.map(&elem(&1, 1)) |> IO.inspect(label: "arg_types")
 
     quote do
       @load_from Module.get_attribute(
