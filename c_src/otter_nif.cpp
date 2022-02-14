@@ -169,36 +169,6 @@ static ERL_NIF_TERM otter_dlsym(ErlNifEnv *env, int argc, const ERL_NIF_TERM arg
     }
 }
 
-static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<std::pair<ERL_NIF_TERM, std::string>> &args_with_type) {
-    if (!enif_is_list(env, arg_types_term)) return 0;
-
-    unsigned int length;
-    if (!enif_get_list_length(env, arg_types_term, &length)) return 0;
-    args_with_type.reserve(length);
-    ERL_NIF_TERM head, tail;
-
-    while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
-        if (enif_is_tuple(env, head)) {
-            int arity;
-            const ERL_NIF_TERM * array;
-            if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
-                std::string arg_type;
-                if (erlang::nif::get_atom(env, array[1], arg_type) || erlang::nif::get(env, array[1], arg_type)) {
-                    args_with_type.push_back(std::make_pair(array[0], arg_type));
-                    arg_types_term = tail;
-                } else {
-                    return 0;
-                }
-            } else {
-                return 0;
-            }
-        } else {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 // TODO: extract a function to prevent segfault
 static std::map<std::string, ffi_type *> str2ffi_type = {
     {"u8", &ffi_type_uint8},
@@ -248,6 +218,36 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_ty
 
 bool get_ffi_struct_resource(ErlNifEnv *env, ERL_NIF_TERM term, ErlNifResourceType *type, void **objp, std::string& struct_id) {
     return enif_get_resource(env, term, type, objp);
+}
+
+static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<std::pair<ERL_NIF_TERM, std::string>> &args_with_type) {
+    if (!enif_is_list(env, arg_types_term)) return 0;
+
+    unsigned int length;
+    if (!enif_get_list_length(env, arg_types_term, &length)) return 0;
+    args_with_type.reserve(length);
+    ERL_NIF_TERM head, tail;
+
+    while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
+        if (enif_is_tuple(env, head)) {
+            int arity;
+            const ERL_NIF_TERM * array;
+            if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
+                std::string arg_type;
+                if (erlang::nif::get_atom(env, array[1], arg_type) || erlang::nif::get(env, array[1], arg_type)) {
+                    args_with_type.push_back(std::make_pair(array[0], arg_type));
+                    arg_types_term = tail;
+                } else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static bool get_struct_return_type(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term,
