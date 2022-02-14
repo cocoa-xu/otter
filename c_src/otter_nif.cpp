@@ -286,15 +286,6 @@ void FFIStructTypeWrapper::finalize()
 
     // vector got resized, so we need to set the ptr in finalize()
     ffi_struct_type.elements = field_types.data();
-    size_t offsets[field_types.size()];
-    // for some reason, size of type must been set before calling ffi_prep_cif, otherwise it crashes
-    auto status = ffi_get_struct_offsets(FFI_DEFAULT_ABI, &ffi_struct_type, offsets);
-    if (status == FFI_OK) {
-        ffi_struct_type.size = offsets[field_types.size() - 1];
-    }
-    else {
-        std::cerr << "warning: ffi_get_struct_offsets failed\n";
-    }
     finalized = true;
 }
 
@@ -319,18 +310,19 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
     wrapper.struct_id = struct_id;
     wrapper.resource_type = get_ffi_struct_resource_type(env, wrapper.struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
-        wrapper.field_types.reserve(args_with_type.size());
         for (size_t i = 0; i < args_with_type.size(); ++i) {
             auto& p = args_with_type[i];
             if (p.second == "c_ptr") {
-                wrapper.field_types.emplace_back(&ffi_type_pointer);
+                wrapper.field_types.push_back(&ffi_type_pointer);
             } else {
-                wrapper.field_types.emplace_back(str2ffi_type[p.second]);
+                wrapper.field_types.push_back(str2ffi_type[p.second]);
             }
         }
-        wrapper.finalize();
-        if (struct_type_wrapper_registry.insert({wrapper.struct_id, wrapper}).second) {
-            return wrapper;
+        auto insert_it = struct_type_wrapper_registry.insert({wrapper.struct_id, wrapper});
+        if (insert_it.second) {
+            // must call finalize() after insert(copy), to update elements' ptr
+            insert_it.first->second.finalize();
+            return insert_it.first->second;
         }
     }
     return FFIStructTypeWrapper{};
@@ -359,9 +351,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         void * symbol = symbol_res->val;
         if (symbol != nullptr) {
             ffi_cif cif;
-            ffi_type **args = (ffi_type **)enif_alloc(sizeof(ffi_type *) * args_with_type.size());
-            void ** values = (void **)enif_alloc(sizeof(void *) * args_with_type.size());
-            ffi_type * ffi_return_type;
+            // NOTE: These values are small structs, allocating them on stack should be ok
+            ffi_type *args[args_with_type.size()];
+            void * values[args_with_type.size()];
+            ffi_type * ffi_return_type = nullptr;
             ffi_arg rc;
             void * null_ptr = nullptr;
             size_t ptrs_cap = 32;
@@ -447,8 +440,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     }
                 }
             }
-            if (struct_return_type) {
-                ffi_return_type = &(struct_return_type.ffi_struct_type);
+            if (struct_return_type && struct_return_type.finalized) {
+                ffi_return_type = &struct_return_type.ffi_struct_type;
             } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
             } else if (return_type == "u8") {
@@ -482,7 +475,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             if (!ready) {
                 return erlang::nif::error(env, "failed to get some input arguments");
             }
-
             ERL_NIF_TERM ret;
             if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
                 ffi_call(&cif, (void (*)())symbol, &rc, values);
@@ -521,9 +513,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 ret = erlang::nif::ok(env);
             }
 
-            enif_free((void *)args);
-            enif_free((void *)values);
-            free((void *)ptrs);
             return ret;
         } else {
             return erlang::nif::error(env, "resource has an invalid handle");
