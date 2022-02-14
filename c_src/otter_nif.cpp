@@ -220,37 +220,6 @@ bool get_ffi_struct_resource(ErlNifEnv *env, ERL_NIF_TERM term, ErlNifResourceTy
     return enif_get_resource(env, term, type, objp);
 }
 
-// NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in this func we convert it to id
-static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<std::pair<ERL_NIF_TERM, std::string>> &args_with_type) {
-    if (!enif_is_list(env, arg_types_term)) return 0;
-
-    unsigned int length;
-    if (!enif_get_list_length(env, arg_types_term, &length)) return 0;
-    args_with_type.reserve(length);
-    ERL_NIF_TERM head, tail;
-
-    while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
-        if (enif_is_tuple(env, head)) {
-            int arity;
-            const ERL_NIF_TERM * array;
-            if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
-                std::string arg_type;
-                if (erlang::nif::get_atom(env, array[1], arg_type) || erlang::nif::get(env, array[1], arg_type)) {
-                    args_with_type.push_back(std::make_pair(array[0], arg_type));
-                    arg_types_term = tail;
-                } else {
-                    return 0;
-                }
-            } else {
-                return 0;
-            }
-        } else {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 class FFIStructTypeWrapper
 {
 public:
@@ -266,7 +235,45 @@ public:
     ffi_type ffi_struct_type;
     std::vector<ffi_type*> field_types;
     ErlNifResourceType* resource_type;
+    std::string struct_id;
 };
+
+// NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in this func we convert it to id
+static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<std::pair<ERL_NIF_TERM, std::string>> &args_with_type) {
+    if (!enif_is_list(env, arg_types_term)) return 0;
+
+    unsigned int length;
+    if (!enif_get_list_length(env, arg_types_term, &length)) return 0;
+    args_with_type.reserve(length);
+    ERL_NIF_TERM head, tail;
+
+    while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
+        if (enif_is_tuple(env, head)) {
+            int arity;
+            const ERL_NIF_TERM * array;
+            FFIStructTypeWrapper struct_type{};
+            if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
+                std::string arg_type;
+                if (erlang::nif::get_atom(env, array[1], arg_type) || erlang::nif::get(env, array[1], arg_type)) {
+                    args_with_type.push_back(std::make_pair(array[0], arg_type));
+                    arg_types_term = tail;
+                }
+                else if (FFIStructTypeWrapper::CreateFromTuple(env, array[1], struct_type)) {
+                    args_with_type.push_back(std::make_pair(array[0], struct_type.struct_id));
+                    arg_types_term = tail;
+                }
+                else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 FFIStructTypeWrapper::FFIStructTypeWrapper()
 {
@@ -283,34 +290,33 @@ void FFIStructTypeWrapper::finalize()
     ffi_struct_type.size = field_types.size();
 }
 
-bool FFIStructTypeWrapper::CreateFromTuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, FFIStructTypeWrapper &ffi_struct_type_wrapper) {
+bool FFIStructTypeWrapper::CreateFromTuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, FFIStructTypeWrapper &wrapper) {
     int arity = -1;
     const ERL_NIF_TERM * array;
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
     bool is_size_correct_tuple = enif_get_tuple(env, struct_return_type_term, &arity, &array) && arity == 3;
     std::string struct_atom;
-    std::string struct_id;
     erlang::nif::get_atom(env, array[0], struct_atom);
-    erlang::nif::get_atom(env, array[1], struct_id);
-    auto& ffi_struct_type = ffi_struct_type_wrapper.ffi_struct_type;
+    erlang::nif::get_atom(env, array[1], wrapper.struct_id);
+    auto& ffi_struct_type = wrapper.ffi_struct_type;
     if (!is_size_correct_tuple) {
         return false;
     }
     if (!(struct_atom == "struct")) {
         return false;
     }
-    ffi_struct_type_wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
+    wrapper.resource_type = get_ffi_struct_resource_type(env, wrapper.struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
-        ffi_struct_type_wrapper.field_types.resize(args_with_type.size());
+        wrapper.field_types.resize(args_with_type.size());
         for (size_t i = 0; i < args_with_type.size(); ++i) {
             auto& p = args_with_type[i];
             if (p.second == "c_ptr") {
-                ffi_struct_type_wrapper.field_types.push_back(&ffi_type_pointer);
+                wrapper.field_types.push_back(&ffi_type_pointer);
             } else {
-                ffi_struct_type_wrapper.field_types.push_back(str2ffi_type[p.second]);
+                wrapper.field_types.push_back(str2ffi_type[p.second]);
             }
         }
-        ffi_struct_type_wrapper.finalize();
+        wrapper.finalize();
         return true;
     } else {
         return false;
