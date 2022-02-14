@@ -221,7 +221,7 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_ty
 class FFIStructTypeWrapper
 {
 public:
-    FFIStructTypeWrapper();
+    FFIStructTypeWrapper() = default;
     FFIStructTypeWrapper(FFIStructTypeWrapper &&) = default;
     FFIStructTypeWrapper(const FFIStructTypeWrapper &) = default;
     FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &&) = default;
@@ -234,7 +234,7 @@ public:
     void finalize();
     static FFIStructTypeWrapper create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
 
-    ffi_type ffi_struct_type{};
+    ffi_type ffi_struct_type;
     std::vector<ffi_type*> field_types;
     ErlNifResourceType* resource_type;
     std::string struct_id;
@@ -277,17 +277,24 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
     return 1;
 }
 
-FFIStructTypeWrapper::FFIStructTypeWrapper()
+void FFIStructTypeWrapper::finalize()
 {
     ffi_struct_type.size = 0; // set by libffi, initialize it to zero
     ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
     ffi_struct_type.type = FFI_TYPE_STRUCT;
     resource_type = nullptr;
-}
 
-void FFIStructTypeWrapper::finalize()
-{
+    // vector got resized, so we need to set the ptr in finalize()
     ffi_struct_type.elements = field_types.data();
+    size_t offsets[field_types.size()];
+    // for some reason, size of type must been set before calling ffi_prep_cif, otherwise it crashes
+    auto status = ffi_get_struct_offsets(FFI_DEFAULT_ABI, &ffi_struct_type, offsets);
+    if (status == FFI_OK) {
+        ffi_struct_type.size = offsets[field_types.size() - 1];
+    }
+    else {
+        std::cerr << "warning: ffi_get_struct_offsets failed\n";
+    }
     finalized = true;
 }
 
