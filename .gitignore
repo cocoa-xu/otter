@@ -27,5 +27,9 @@ otter-*.tar
 .DS_Store
 .idea/
 
+# cmake build dir
+build*
+cmake-build*
+
 # vscode
 .vscode
