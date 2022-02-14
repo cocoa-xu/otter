@@ -216,10 +216,6 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_ty
     return enif_make_resource(env, resource);
 }
 
-bool get_ffi_struct_resource(ErlNifEnv *env, ERL_NIF_TERM term, ErlNifResourceType *type, void **objp, std::string& struct_id) {
-    return enif_get_resource(env, term, type, objp);
-}
-
 class FFIStructTypeWrapper
 {
 public:
@@ -429,9 +425,19 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     // todo: handle va_args
                     args[i] = &ffi_type_pointer;
                     values[i] = &null_ptr;
-                } else {
-                    // todo: other types
-                    printf("[debug] todo: arg%zu, type: %s\r\n", i, p.second.c_str());
+                }
+                else {
+                    auto wrapper_it = struct_type_wrapper_registry.find(p.second);
+                    if (wrapper_it != struct_type_wrapper_registry.end()) {
+                        args[i] = &wrapper_it->second.ffi_struct_type;
+                        void ** resource_obj_ptr = nullptr;
+                        const bool resource = enif_get_resource(env, p.first, wrapper_it->second.resource_type, resource_obj_ptr);
+                        if (!resource) return erlang::nif::error(env, ("failed to get resource for struct: " + wrapper_it->second.struct_id).c_str());
+                        values[i] = resource_obj_ptr;
+                    } else {
+                        // todo: other types
+                        printf("[debug] todo: arg%zu, type: %s\r\n", i, p.second.c_str());
+                    }
                 }
             }
             if (struct_return_type) {
@@ -479,8 +485,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             ERL_NIF_TERM ret;
             if (struct_return_type) {
                 ret = make_ffi_struct_resource(env, struct_return_type.ffi_struct_type, struct_return_type.resource_type, rc);
-            }
-            else if (return_type == "void") {
+            } else if (return_type == "void") {
                 ret = erlang::nif::ok(env);
             } else if (return_type == "u8") {
                 ret = enif_make_uint(env, *(uint8_t *)rc);
