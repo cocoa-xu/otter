@@ -26,7 +26,7 @@ defmodule Otter do
   - `mode`: dlopen mode. See man (3) dlopen for details.
   """
   def dlopen(nil, mode) when is_atom(mode) do
-    dlopen("RTLD_SELF", Map.get(@mode_to_int, mode))
+    dlopen(:RTLD_SELF, mode)
   end
 
   def dlopen(:RTLD_SELF, mode) when is_atom(mode) do
