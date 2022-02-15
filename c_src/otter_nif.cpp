@@ -321,7 +321,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     OtterSymbol * symbol_res;
 
     std::string return_type;
-    FFIStructTypeWrapper* struct_return_type;
+    FFIStructTypeWrapper* struct_return_type = nullptr;
 
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
     if (erlang::nif::get_atom(env, argv[1], return_type)) {
