@@ -1,3 +1,4 @@
+#include <cassert>
 #include <dlfcn.h>
 #include <erl_nif.h>
 #include <ffi.h>
@@ -221,23 +222,22 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_ty
 class FFIStructTypeWrapper
 {
 public:
-    FFIStructTypeWrapper() = default;
+    FFIStructTypeWrapper(size_t field_size) : field_types(field_size) {
+        ffi_struct_type.size = 0; // set by libffi, initialize it to zero
+        ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
+        ffi_struct_type.type = FFI_TYPE_STRUCT;
+        ffi_struct_type.elements = field_types.data();
+    };
     FFIStructTypeWrapper(FFIStructTypeWrapper &&) = default;
     FFIStructTypeWrapper(const FFIStructTypeWrapper &) = delete;
     FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &) = delete;
     FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = delete;
     ~FFIStructTypeWrapper() = default;
-    explicit operator bool()
-    {
-        return finalized;
-    }
-    void finalize();
     static FFIStructTypeWrapper* create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
 
     ffi_type ffi_struct_type;
     ErlNifResourceType* resource_type;
     std::string struct_id;
-    bool finalized = false;
 private:
     std::vector<ffi_type*> field_types;
 };
@@ -278,17 +278,6 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
     return 1;
 }
 
-void FFIStructTypeWrapper::finalize()
-{
-    ffi_struct_type.size = 0; // set by libffi, initialize it to zero
-    ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
-    ffi_struct_type.type = FFI_TYPE_STRUCT;
-
-    // vector got resized, so we need to set the ptr in finalize()
-    ffi_struct_type.elements = field_types.data();
-    finalized = true;
-}
-
 static std::map<std::string, FFIStructTypeWrapper> struct_type_wrapper_registry{};
 
 FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term) {
@@ -306,21 +295,21 @@ FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ER
     if (wrapper_it != struct_type_wrapper_registry.end()) {
         return &wrapper_it->second;
     }
-    FFIStructTypeWrapper wrapper_;
-    auto insert_it = struct_type_wrapper_registry.insert({struct_id, std::move(wrapper_)});
-    if (!insert_it.second) return nullptr;
-    auto& wrapper = insert_it.first->second;
-    wrapper.struct_id = struct_id;
-    wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
-        for (auto& p : args_with_type ) {
+        auto insert_it = struct_type_wrapper_registry.emplace(struct_id, FFIStructTypeWrapper(args_with_type.size()));
+        if (!insert_it.second) return nullptr;
+        auto& wrapper = insert_it.first->second;
+        assert(wrapper.field_types.size() == args_with_type.size());
+        wrapper.struct_id = struct_id;
+        wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
+        for (size_t i = 0; i < args_with_type.size(); ++i) {
+            auto& p = args_with_type[i];
             if (p.second == "c_ptr") {
-                wrapper.field_types.push_back(&ffi_type_pointer);
+                wrapper.field_types[i] = &ffi_type_pointer;
             } else {
-                wrapper.field_types.push_back(str2ffi_type[p.second]);
+                wrapper.field_types[i] = str2ffi_type[p.second];
             }
         }
-        wrapper.finalize();
         return &wrapper;
     }
     return nullptr;
@@ -438,7 +427,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     }
                 }
             }
-            if (struct_return_type && struct_return_type->finalized) {
+            if (struct_return_type) {
                 ffi_return_type = &struct_return_type->ffi_struct_type;
             } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
