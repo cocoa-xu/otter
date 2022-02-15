@@ -45,30 +45,30 @@ end
 # - one returns ok-error tuple, 
 # - the other is the bang version, which returns unwrapped value on :ok, and raise RuntimeError on :error  
 
-iex> Ctypes.puts("hello \r")
+iex> CtypesDemo.puts("hello \r")
 hello
 {:ok, 10}
-iex> Ctypes.puts!("hello \r")
+iex> CtypesDemo.puts!("hello \r")
 hello
 10
-iex> Ctypes.printf!("world!\r\n")
+iex> CtypesDemo.printf!("world!\r\n")
 world!
 9
-iex> Ctypes.sin(3.1415926535)
+iex> CtypesDemo.sin(3.1415926535)
 {:ok, 8.979318433952318e-11}
-iex> Ctypes.sin!(3.1415926535)
+iex> CtypesDemo.sin!(3.1415926535)
 8.979318433952318e-11
-iex> Ctypes.cos!(0)
+iex> CtypesDemo.cos!(0)
 1.0
-iex> Ctypes.cos!(0.0)
+iex> CtypesDemo.cos!(0.0)
 1.0
-iex> handle = Ctypes.dlopen!("/usr/lib/libSystem.B.dylib", 2) # or "libc.so" for Linux
+iex> handle = CtypesDemo.dlopen!("/usr/lib/libSystem.B.dylib", 2) # or "libc.so" for Linux
 20152781936
-iex> dlsym_addr = Ctypes.dlsym!(handle, "dlsym")
+iex> dlsym_addr = CtypesDemo.dlsym!(handle, "dlsym")
 7023526352
 ```
 
-Note that we have `Ctypes.dlopen` and `Ctypes.dlsym` in the demo code above. They are declared in the `lib/ctypes_demo.ex`
+Note that we have `CtypesDemo.dlopen` and `CtypesDemo.dlsym` in the demo code above. They are declared in the `examples/ctypes_demo.ex`
 file. 
 
 ```elixir
@@ -76,12 +76,12 @@ file.
   extern dlsym(:c_ptr, c_ptr, c_ptr)
 ```
 
-And they are different from the ones in module Otter, namely, `Otter.dlopen` and `Otter.dlsym`. `Ctypes.dl*` are obtained
+And they are different from the ones in module Otter, namely, `Otter.dlopen` and `Otter.dlsym`. `CtypesDemo.dl*` are obtained
 by `Otter.dlopen` and `Otter.dlsym`. 
 
-Just like the `sin` and `cos` functions in `Ctypes`, `dlopen` and `dlsym` are also C functions that can be `dlsym`'ed.
+Just like the `sin` and `cos` functions in `CtypesDemo`, `dlopen` and `dlsym` are also C functions that can be `dlsym`'ed.
 
-`Otter.dl*` calls go to NIFs `otter_dl*` functions while `Ctypes.dl*` calls going to `Otter.invoke` which redirects to 
+`Otter.dl*` calls go to NIFs `otter_dl*` functions while `CtypesDemo.dl*` calls going to `Otter.invoke` which redirects to 
 the `otter_invoke` NIF.
 
 ## Support for C struct
