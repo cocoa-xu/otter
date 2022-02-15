@@ -214,6 +214,10 @@ static ERL_NIF_TERM otter_symbol_addr(ErlNifEnv *env, int argc, const ERL_NIF_TE
     }
 }
 
+static ERL_NIF_TERM otter_erl_nif_env(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    return enif_make_uint64(env, (uint64_t)(*(uint64_t *)env));
+}
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) return enif_make_badarg(env);
 
@@ -426,6 +430,7 @@ static ErlNifFunc nif_functions[] = {
     {"dlclose", 1, otter_dlclose, 0},
     {"dlsym", 2, otter_dlsym, 0},
     {"symbol_addr", 1, otter_symbol_addr, 0},
+    {"erl_nif_env", 0, otter_erl_nif_env, 0},
     {"invoke", 3, otter_invoke, 0},
 };
 
