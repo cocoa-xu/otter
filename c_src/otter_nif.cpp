@@ -235,10 +235,11 @@ public:
     static FFIStructTypeWrapper* create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
 
     ffi_type ffi_struct_type;
-    std::vector<ffi_type*> field_types;
     ErlNifResourceType* resource_type;
     std::string struct_id;
     bool finalized = false;
+private:
+    std::vector<ffi_type*> field_types;
 };
 
 // NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in this func we convert it to id
@@ -438,7 +439,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 }
             }
             if (struct_return_type && struct_return_type->finalized) {
-                // struct_return_type.ffi_struct_type.elements = struct_return_type.field_types.data();
                 ffi_return_type = &struct_return_type->ffi_struct_type;
             } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
