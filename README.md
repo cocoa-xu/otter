@@ -33,21 +33,30 @@ defmodule Ctypes do
   extern cos(:f64, theta :: f64)
 end
 
-iex(1)> Ctypes.puts("hello \r")
+# one extern will define two function, 
+# - one returns ok-error tuple, 
+# - the other is the bang version, which returns unwrapped value on :ok, and raise RuntimeError on :error  
+
+iex> Ctypes.puts("hello \r")
+hello
+{:ok, 10}
+iex> Ctypes.puts!("hello \r")
 hello
 10
-iex(2)> Ctypes.printf("world!\r\n")
+iex> Ctypes.printf!("world!\r\n")
 world!
 9
-iex(3)> Ctypes.sin(3.1415926535)
+iex> Ctypes.sin(3.1415926535)
+{:ok, 8.979318433952318e-11}
+iex> Ctypes.sin!(3.1415926535)
 8.979318433952318e-11
-iex(4)> Ctypes.cos(0)
+iex> Ctypes.cos!(0)
 1.0
-iex(5)> Ctypes.cos(0.0)
+iex> Ctypes.cos!(0.0)
 1.0
-iex(6)> handle = Ctypes.dlopen("/usr/lib/libSystem.B.dylib", 2) # or "libc.so" for Linux
+iex> handle = Ctypes.dlopen!("/usr/lib/libSystem.B.dylib", 2) # or "libc.so" for Linux
 20152781936
-iex(7)> dlsym_addr = Ctypes.dlsym(handle, "dlsym")
+iex> dlsym_addr = Ctypes.dlsym!(handle, "dlsym")
 7023526352
 ```
 
