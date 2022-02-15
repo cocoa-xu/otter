@@ -67,6 +67,75 @@ Just like the `sin` and `cos` functions in `Ctypes`, `dlopen` and `dlsym` are al
 `Otter.dl*` calls go to NIFs `otter_dl*` functions while `Ctypes.dl*` calls going to `Otter.invoke` which redirects to 
 the `otter_invoke` NIF.
 
+## Support for C struct
+### basic example
+```elixir
+defmodule Foo do
+  import Otter
+  
+  @default_from Path.join([__DIR__, "test.so"])
+  @default_mode :RTLD_NOW
+  
+  # #pragma pack(push, 4)
+  # struct alignas(4) s_u8_u16 {
+  #     uint8_t u8;
+  #     uint16_t u16;
+  # };
+  # #pragma pack(pop)
+  cstruct(s_u8_u16(u8 :: u8, u16 :: u16))
+
+  # please see test/test.cpp for these extern functions
+  extern create_s_u8_u16(s_u8_u16())
+  extern receive_s_u8_u16(:u32, t :: s_u8_u16())
+end
+```
+
+### C struct with vtable
+```elixir
+defmodule Foo do
+  import Otter
+
+  @default_from Path.join([__DIR__, "test.so"])
+  @default_mode :RTLD_NOW
+  
+  # #pragma pack(push, 4)
+  # struct alignas(4) s_vptr {
+  #     uint8_t u8;
+  #     uint16_t u16;
+  #     uint32_t u32;
+  #     uint64_t u64;
+  #     virtual void ptr_a() {};
+  # };
+  # #pragma pack(pop)
+  cstruct(s_vptr(
+    vptr :: c_ptr, 
+    u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
+
+  # please see test/test.cpp for these extern functions
+  extern create_s_vptr(s_vptr())
+  extern receive_s_vptr(:u32, t :: s_vptr())
+end
+```
+
+### nd-array in C struct
+```elixir
+defmodule Foo do
+  import Otter
+
+  @default_from Path.join([__DIR__, "test.so"])
+  @default_mode :RTLD_NOW
+  
+  # struct matrix16x16 {
+  #     uint32_t m[16][16];
+  # };
+  cstruct(matrix16x16(m :: u32-size(16, 16)))
+
+  # please see test/test.cpp for these extern functions
+  extern create_matrix16x16(matrix16x16())
+  extern receive_matrix16x16(:u32, t :: matrix16x16())
+end
+```
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
