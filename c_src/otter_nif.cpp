@@ -1,4 +1,3 @@
-#include <cassert>
 #include <dlfcn.h>
 #include <erl_nif.h>
 #include <ffi.h>
@@ -213,7 +212,7 @@ static ErlNifResourceType* get_ffi_struct_resource_type(ErlNifEnv *env, std::str
     }
 }
 
-static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_type, ErlNifResourceType* resource_type, ffi_arg& result) {
+static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env, ffi_type& struct_type, ErlNifResourceType* resource_type, void * result) {
     auto resource = enif_alloc_resource(resource_type, struct_type.size);
     memcpy(resource, (void*)result, struct_type.size);
     return enif_make_resource(env, resource);
@@ -296,10 +295,10 @@ FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ER
         return &wrapper_it->second;
     }
     if (get_args_with_type(env, array[2], args_with_type)) {
-        auto insert_it = struct_type_wrapper_registry.emplace(struct_id, FFIStructTypeWrapper(args_with_type.size()));
+        auto insert_it = struct_type_wrapper_registry.emplace(struct_id, FFIStructTypeWrapper(args_with_type.size() + 1));
         if (!insert_it.second) return nullptr;
         auto& wrapper = insert_it.first->second;
-        assert(wrapper.field_types.size() == args_with_type.size());
+
         wrapper.struct_id = struct_id;
         wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
         for (size_t i = 0; i < args_with_type.size(); ++i) {
@@ -310,6 +309,7 @@ FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ER
                 wrapper.field_types[i] = str2ffi_type[p.second];
             }
         }
+        wrapper.field_types[args_with_type.size()] = nullptr;
         return &wrapper;
     }
     return nullptr;
@@ -341,8 +341,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             // NOTE: These values are small structs, allocating them on stack should be ok
             ffi_type *args[args_with_type.size()];
             void * values[args_with_type.size()];
-            ffi_type * ffi_return_type = nullptr;
-            ffi_arg rc;
+            ffi_type * ffi_return_type;
+            // todo: pass return_object_size for c struct
+            size_t return_object_size = sizeof(void *);
+            void * rc = malloc(return_object_size);
             void * null_ptr = nullptr;
             size_t ptrs_cap = 32;
             size_t ptrs_next = 0;
@@ -464,7 +466,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
             ERL_NIF_TERM ret;
             if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
-                ffi_call(&cif, (void (*)())symbol, &rc, values);
+                ffi_call(&cif, (void (*)())symbol, rc, values);
             } else {
                 return erlang::nif::error(env, "ffi_prep_cif failed");
             }
@@ -500,6 +502,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 ret = erlang::nif::ok(env);
             }
 
+            free(rc);
             return ret;
         } else {
             return erlang::nif::error(env, "resource has an invalid handle");
