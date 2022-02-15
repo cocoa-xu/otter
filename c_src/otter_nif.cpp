@@ -282,7 +282,6 @@ void FFIStructTypeWrapper::finalize()
     ffi_struct_type.size = 0; // set by libffi, initialize it to zero
     ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
     ffi_struct_type.type = FFI_TYPE_STRUCT;
-    resource_type = nullptr;
 
     // vector got resized, so we need to set the ptr in finalize()
     ffi_struct_type.elements = field_types.data();
