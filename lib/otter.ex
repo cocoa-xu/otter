@@ -53,6 +53,25 @@ defmodule Otter do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end
 
+  defp get_unique_arg_name(arg_name, index) do
+    arg_name
+    |> Atom.to_string()
+    |> then(&"#{&1}_#{index}")
+    |> String.to_atom()
+  end
+
+  defmodule CStruct do
+    defstruct fields: [], id: nil
+  end
+
+  def transform_type(%CStruct{fields: fields, id: id}) do
+    {:struct, id, fields}
+  end
+
+  def transform_type(name) when is_atom(name) do
+    name
+  end
+
   defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
     [return_type | func_args] = args
@@ -60,26 +79,32 @@ defmodule Otter do
     func_arg_types =
       func_args
       |> Enum.with_index(fn element, index -> {element, index} end)
-      |> Enum.map(fn {{arg_name, line, extra}, index} ->
-        case extra do
-          nil ->
-            unique_arg_name =
-              arg_name
-              |> Atom.to_string()
-              |> then(&"#{&1}_#{index}")
-              |> String.to_atom()
+      |> Enum.map(fn
+        {{struct_name, line, []}, index} when is_atom(struct_name) ->
+          unique_arg_name = get_unique_arg_name(struct_name, index)
 
-            {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
+          struct_tuple =
+            quote do
+              unquote(struct_name)() |> Otter.transform_type()
+            end
 
-          [{arg_name, line, _}, {arg_type, _, _}] ->
-            arg_name =
-              arg_name
-              |> Atom.to_string()
-              |> then(&"#{&1}_#{index}")
-              |> String.to_atom()
+          {{unique_arg_name, line, nil}, struct_tuple}
 
-            {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
-        end
+        {{arg_name, line, extra}, index} ->
+          case extra do
+            nil ->
+              unique_arg_name = get_unique_arg_name(arg_name, index)
+              {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
+
+            [{arg_name, line, _}, {arg_type, _, _}] ->
+              arg_name =
+                arg_name
+                |> Atom.to_string()
+                |> then(&"#{&1}_#{index}")
+                |> String.to_atom()
+
+              {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
+          end
       end)
 
     func_args =
@@ -103,18 +128,35 @@ defmodule Otter do
                  )
       def unquote(:"#{name}")(unquote_splicing(func_args)) do
         func_name = __ENV__.function |> elem(0) |> Atom.to_string()
-        return_type = unquote(return_type)
+        return_type = unquote(return_type) |> Otter.transform_type()
 
         with {:ok, image} <- Otter.dlopen(@load_from, @load_mode),
              {:ok, symbol} <- Otter.dlsym(image, func_name) do
           Otter.invoke(
             symbol,
             return_type,
-            Enum.zip([unquote_splicing(func_args)], unquote(arg_types))
+            Enum.zip([unquote_splicing(func_args)], [unquote_splicing(arg_types)])
           )
         else
           {:error, reason} -> raise reason
         end
+      end
+    end
+  end
+
+  defmacro cstruct(declaration) do
+    {name, fields} = Macro.decompose_call(declaration)
+    name = Atom.to_string(name)
+
+    fields =
+      fields
+      |> Enum.map(fn {:"::", _, [{arg_name, _, nil}, {type_name, _, nil}]} ->
+        {arg_name, type_name}
+      end)
+
+    quote do
+      def unquote(:"#{name}")() do
+        struct(Otter.CStruct, fields: unquote(fields), id: unquote(:"#{name}"))
       end
     end
   end

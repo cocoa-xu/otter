@@ -26,3 +26,11 @@ otter-*.tar
 /tmp/
 .DS_Store
 .idea/
+
+# cmake build dir
+build*
+cmake-build*
+
+# vscode
+.vscode
+test/*.so
