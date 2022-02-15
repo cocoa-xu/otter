@@ -6,6 +6,8 @@ defmodule OtterTest do
   @default_from Path.join([__DIR__, "test.so"])
   @default_mode :RTLD_NOW
 
+  extern add_two_32(:u32, a :: u32, b :: u32)
+
   # #pragma pack(push, 4)
   # struct alignas(4) s_u8_u16 {
   #     uint8_t u8;
@@ -53,6 +55,10 @@ defmodule OtterTest do
     ))
   extern create_complex(complex())
   extern receive_complex(:u32, t :: complex())
+
+  test "add_two_32" do
+    7 = add_two_32(3, 4)
+  end
 
   test "s_u8_u16" do
     t = create_s_u8_u16()

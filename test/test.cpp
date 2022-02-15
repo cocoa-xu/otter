@@ -106,4 +106,8 @@ uint32_t receive_complex(struct complex t) {
         t.bar.u16 == 49152
     );
 }
+
+uint32_t add_two_32(uint32_t a, uint32_t b) {
+    return a + b;
+}
 }
