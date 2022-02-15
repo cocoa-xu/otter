@@ -175,7 +175,6 @@ static ERL_NIF_TERM otter_dlsym(ErlNifEnv *env, int argc,
   }
 }
 
-// TODO: extract a function to prevent segfault
 static std::map<std::string, ffi_type *> str2ffi_type = {
     {"u8", &ffi_type_uint8},   {"u16", &ffi_type_uint16},
     {"u32", &ffi_type_uint32}, {"u64", &ffi_type_uint64},
@@ -217,7 +216,9 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
                                              void *result) {
   auto resource = enif_alloc_resource(resource_type, struct_type.size);
   memcpy(resource, (void *)result, struct_type.size);
-  return enif_make_resource(env, resource);
+  ERL_NIF_TERM res = enif_make_resource(env, resource);
+  enif_release_resource(resource);
+  return res;
 }
 
 class FFIStructTypeWrapper {
@@ -399,23 +400,37 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
   return nullptr;
 }
 
-static ERL_NIF_TERM otter_symbol_addr(ErlNifEnv *env, int argc,
-                                      const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
-    return enif_make_badarg(env);
+static ERL_NIF_TERM otter_symbol_to_address(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) return enif_make_badarg(env);
 
   OtterSymbol *symbol_res;
-  if (enif_get_resource(env, argv[0], OtterSymbol::type,
-                        (void **)&symbol_res)) {
+  if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res)) {
     void *symbol = symbol_res->val;
     // if it is nullptr, then the return value will be 0
     // which I'd like to keep it the same as what would have expected to be
     // if (symbol != nullptr)
-    return erlang::nif::ok(
-        env, enif_make_uint64(env, (uint64_t)(*(uint64_t *)symbol)));
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)(*(uint64_t *)symbol)));
   } else {
     return erlang::nif::error(env, "cannot get symbol resource");
   }
+}
+
+static ERL_NIF_TERM otter_address_to_symbol(ErlNifEnv *env, int argc,
+                                            const ERL_NIF_TERM argv[]) {
+    if (argc != 1) return enif_make_badarg(env);
+
+    OtterSymbol *symbol_res;
+    uint64_t address;
+    if (erlang::nif::get_uint64(env, argv[0], &address)) {
+        if (alloc_resource(&symbol_res)) {
+            symbol_res->val = (void *)(uint64_t *)address;
+            return erlang::nif::ok(env, enif_make_resource(env, symbol_res));
+        } else {
+            return erlang::nif::error(env, "cannot allocate memory for resource");
+        }
+    } else {
+        return erlang::nif::error(env, "cannot get address");
+    }
 }
 
 static ERL_NIF_TERM otter_erl_nif_env(ErlNifEnv *env, int argc,
@@ -926,7 +941,8 @@ static ErlNifFunc nif_functions[] = {
     {"dlopen", 2, otter_dlopen, 0},
     {"dlclose", 1, otter_dlclose, 0},
     {"dlsym", 2, otter_dlsym, 0},
-    {"symbol_addr", 1, otter_symbol_addr, 0},
+    {"symbol_to_address", 1, otter_symbol_to_address, 0},
+    {"address_to_symbol", 1, otter_address_to_symbol, 0},
     {"erl_nif_env", 0, otter_erl_nif_env, 0},
     {"invoke", 3, otter_invoke, 0},
 };
