@@ -312,8 +312,7 @@ FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ER
     wrapper.struct_id = struct_id;
     wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
     if (get_args_with_type(env, array[2], args_with_type)) {
-        for (size_t i = 0; i < args_with_type.size(); ++i) {
-            auto& p = args_with_type[i];
+        for (auto& p : args_with_type ) {
             if (p.second == "c_ptr") {
                 wrapper.field_types.push_back(&ffi_type_pointer);
             } else {
