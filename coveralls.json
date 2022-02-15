@@ -1,0 +1,6 @@
+{
+  "skip_files": [
+    "example",
+    "lib/otter_nif.ex"
+  ]
+}

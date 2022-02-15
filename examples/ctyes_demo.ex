@@ -1,4 +1,4 @@
-defmodule Ctypes do
+defmodule CtypesDemo do
   import Otter, except: [{:dlopen, 2}, {:dlsym, 2}]
 
   # module level default shared library name/path
