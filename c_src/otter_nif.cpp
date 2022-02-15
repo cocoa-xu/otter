@@ -595,7 +595,7 @@ static bool handle_arg(
 }
 
 template <>
-static bool handle_arg(
+bool handle_arg(
         ErlNifEnv *env,
         int(*get_nif_term_value)(ErlNifEnv *, ERL_NIF_TERM, int64_t *),
         arg_type &p,

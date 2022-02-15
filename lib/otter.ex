@@ -119,11 +119,11 @@ defmodule Otter do
     defstruct fields: [], id: nil
   end
 
-  defp transform_type(%CStruct{fields: fields, id: id}) do
+  def transform_type(%CStruct{fields: fields, id: id}) do
     {:struct, id, fields}
   end
 
-  defp transform_type(name) when is_atom(name) do
+  def transform_type(name) when is_atom(name) do
     name
   end
 
