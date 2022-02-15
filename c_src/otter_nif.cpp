@@ -342,7 +342,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             ffi_type *args[args_with_type.size()];
             void * values[args_with_type.size()];
             ffi_type * ffi_return_type;
-            // todo: pass return_object_size for c struct
             size_t return_object_size = sizeof(void *);
             void * rc = nullptr;
             void * null_ptr = nullptr;
