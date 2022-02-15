@@ -873,12 +873,15 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       } else if (return_type == "c_ptr") {
         ret = enif_make_uint64(env, (uint64_t)(*(uint64_t *)rc));
       } else {
+        // todo
         printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
-        ret = erlang::nif::ok(env);
+        free(rc);
+        error_msg = "return_type " + return_type + " is not implemented yet";
+        return erlang::nif::error(env, error_msg.c_str());
       }
 
       free(rc);
-      return ret;
+      return erlang::nif::ok(env, ret);
     } else {
       return erlang::nif::error(env, "resource has an invalid handle");
     }
