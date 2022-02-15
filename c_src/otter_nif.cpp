@@ -344,7 +344,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             ffi_type * ffi_return_type;
             // todo: pass return_object_size for c struct
             size_t return_object_size = sizeof(void *);
-            void * rc = malloc(return_object_size);
+            void * rc = nullptr;
             void * null_ptr = nullptr;
             size_t ptrs_cap = 32;
             size_t ptrs_next = 0;
@@ -419,8 +419,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     auto wrapper_it = struct_type_wrapper_registry.find(p.second);
                     if (wrapper_it != struct_type_wrapper_registry.end()) {
                         args[i] = &wrapper_it->second.ffi_struct_type;
-                        void ** resource_obj_ptr = nullptr;
-                        const bool resource = enif_get_resource(env, p.first, wrapper_it->second.resource_type, resource_obj_ptr);
+                        void * resource_obj_ptr = nullptr;
+                        const bool resource = enif_get_resource(env, p.first, wrapper_it->second.resource_type, &resource_obj_ptr);
                         if (!resource) return erlang::nif::error(env, ("failed to get resource for struct: " + wrapper_it->second.struct_id).c_str());
                         values[i] = resource_obj_ptr;
                     } else {
@@ -466,6 +466,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
             ERL_NIF_TERM ret;
             if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
+                return_object_size = ffi_return_type->size; // size here gets updated by ffi_prep_cif
+                rc = malloc(return_object_size);
                 ffi_call(&cif, (void (*)())symbol, rc, values);
             } else {
                 return erlang::nif::error(env, "ffi_prep_cif failed");
