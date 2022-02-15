@@ -49,12 +49,19 @@ defmodule OtterTest do
   cstruct(complex(vptr :: c_ptr,
     u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64, padding_1 :: u16, padding_2 :: u8, # todo: how to inherit from s_vptr
     c1 :: u8, c2 :: u8,
-    c3_1 :: u8, c3_2 :: u8, c3_3 :: u8, c3_padding :: u8, # todo: how to declare uint8_t c3[3]?
+    c3 :: u8-size(3), # declare uint8_t c3[3]
     foo :: u16, # todo: needs some improvement, as the size of a union may not be fit in the types we have for now
     bar :: u32 # todo: embed another struct inside, bar :: s_u8_u16()
     ))
   extern create_complex(complex())
   extern receive_complex(:u32, t :: complex())
+
+  # struct matrix16x16 {
+  #     uint32_t m[16][16];
+  # };
+  cstruct(matrix16x16(m :: u32-size(16, 16)))
+  extern create_matrix16x16(matrix16x16())
+  extern receive_matrix16x16(:u32, t :: matrix16x16())
 
   test "add_two_32" do
     7 = add_two_32(3, 4)
@@ -73,5 +80,10 @@ defmodule OtterTest do
   test "complex" do
     t = create_complex()
     assert 1 == receive_complex(t)
+  end
+
+  test "nd-array" do
+    t = create_matrix16x16()
+    assert 32640 == receive_matrix16x16(t)
   end
 end

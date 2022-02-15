@@ -132,10 +132,14 @@ defmodule Otter do
 
         with {:ok, image} <- Otter.dlopen(@load_from, @load_mode),
              {:ok, symbol} <- Otter.dlsym(image, func_name) do
+          type_info =
+            Enum.map([unquote_splicing(arg_types)], fn cur_type ->
+              %{type: cur_type}
+            end)
           Otter.invoke(
             symbol,
             return_type,
-            Enum.zip([unquote_splicing(func_args)], [unquote_splicing(arg_types)])
+            Enum.zip([unquote_splicing(func_args)], type_info)
           )
         else
           {:error, reason} -> raise reason
@@ -148,15 +152,44 @@ defmodule Otter do
     {name, fields} = Macro.decompose_call(declaration)
     name = Atom.to_string(name)
 
-    fields =
+    [fields, extra_info] =
       fields
-      |> Enum.map(fn {:"::", _, [{arg_name, _, nil}, {type_name, _, nil}]} ->
-        {arg_name, type_name}
+      |> Enum.reduce([[], []], fn type_identifier, [fields, extra_info] ->
+        case type_identifier do
+          {:"::", _, [{arg_name, _, nil}, {type_name, _, nil}]} ->
+            [
+              [{arg_name, type_name} | fields],
+              [[] | extra_info]
+            ]
+          {:"::", _, [{arg_name, _, nil}, {:-, _, [{type_name, _, nil}, {:size, _, array_size}]}]} ->
+            array_size = array_size |> List.to_tuple() |> Tuple.product()
+            [
+              [{arg_name, type_name} | fields],
+              [[{:size, array_size}] | extra_info]
+            ]
+        end
       end)
+    fields = Enum.reverse(fields)
+    extra_info = Enum.reverse(extra_info)
 
     quote do
       def unquote(:"#{name}")() do
-        struct(Otter.CStruct, fields: unquote(fields), id: unquote(:"#{name}"))
+        fields = unquote(fields)
+        extra_info = unquote(extra_info)
+        fields_with_extra_info =
+          Enum.zip(fields, extra_info) |> Enum.map(fn {{field_name, field_type}, extra} ->
+            case extra do
+              [] ->
+                {field_name, %{type: field_type}}
+              _ ->
+                map =
+                  Enum.reduce(extra, %{type: field_type}, fn {extra_name, extra_value}, map ->
+                    Map.put(map, extra_name, extra_value)
+                  end)
+                {field_name, map}
+            end
+          end)
+        struct(Otter.CStruct, fields: fields_with_extra_info, id: unquote(:"#{name}"))
       end
     end
   end
