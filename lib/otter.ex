@@ -3,6 +3,8 @@ defmodule Otter do
   Documentation for `Otter`.
   """
 
+  import Otter.Errorize
+
   @mode_to_int %{
     :RTLD_LAZY => 0x00001,
     :RTLD_NOW => 0x00002,
@@ -145,6 +147,7 @@ defmodule Otter do
           {:error, reason} -> raise reason
         end
       end
+      deferror(unquote(:"#{name}")(unquote_splicing(func_args)))
     end
   end
 
