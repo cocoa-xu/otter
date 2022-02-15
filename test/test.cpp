@@ -35,6 +35,10 @@ struct alignas(8) complex : public s_vptr {
 };
 #pragma pack(pop)
 
+struct matrix16x16 {
+    uint32_t m[16][16];
+};
+
 extern "C" {
 struct s_u8_u16 create_s_u8_u16() {
     struct s_u8_u16 t;
@@ -109,5 +113,25 @@ uint32_t receive_complex(struct complex t) {
 
 uint32_t add_two_32(uint32_t a, uint32_t b) {
     return a + b;
+}
+
+struct matrix16x16 create_matrix16x16() {
+    struct matrix16x16 t;
+    for (size_t i = 0; i < 16; i++) {
+        for (size_t j = 0; j < 16; ++j) {
+            t.m[i][j] = 16 * i + j;
+        }
+    }
+    return t;
+}
+
+uint32_t receive_matrix16x16(struct matrix16x16 t) {
+    uint32_t sum = 0;
+    for (size_t i = 0; i < 16; i++) {
+        for (size_t j = 0; j < 16; ++j) {
+            sum += t.m[i][j];
+        }
+    }
+    return sum;
 }
 }
