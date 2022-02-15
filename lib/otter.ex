@@ -103,7 +103,9 @@ defmodule Otter do
       func_arg_types
       |> Enum.map(&elem(&1, 0))
 
-    arg_types = func_arg_types |> Enum.map(&elem(&1, 1)) |> IO.inspect(label: "arg_types")
+    arg_types =
+      func_arg_types
+      |> Enum.map(&elem(&1, 1))
 
     quote do
       @load_from Module.get_attribute(
