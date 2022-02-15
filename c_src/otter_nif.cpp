@@ -551,7 +551,7 @@ ffi_type * get_default_ffi_type(double) {
     return &ffi_type_double;
 }
 
-template <typename T, typename ERL_API_T, typename get_nif_term_func = int(*)(ErlNifEnv *, ERL_NIF_TERM, ERL_API_T*)>
+template <typename T, typename ERL_API_T=T, typename get_nif_term_func = int(*)(ErlNifEnv *, ERL_NIF_TERM, ERL_API_T*)>
 static bool handle_arg(
         ErlNifEnv *env,
         get_nif_term_func get_nif_term_value,
@@ -559,7 +559,7 @@ static bool handle_arg(
         ffi_type **&args,
         size_t arg_index,
         std::map<ffi_type *, void *> &ffi_res,
-        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex)
+        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex, T _unused=0)
 {
     ERL_API_T value;
     if (get_nif_term_value(env, p.term, &value)) {
@@ -577,6 +577,48 @@ static bool handle_arg(
         printf("[debug] cannot get value for %s\r\n", p.type.c_str());
         return false;
     }
+}
+
+template <>
+static bool handle_arg(
+        ErlNifEnv *env,
+        int(*get_nif_term_value)(ErlNifEnv *, ERL_NIF_TERM, int64_t *),
+        arg_type &p,
+        ffi_type **&args,
+        size_t arg_index,
+        std::map<ffi_type *, void *> &ffi_res,
+        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex, void * _unused)
+{
+    auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
+    // if enif_inspect_binary succeeded,
+    // `binary.data` will live until we return to erlang
+    ErlNifBinary binary;
+    int64_t ptr;
+    size_t value_slot = 0;
+    std::string null_c_ptr;
+    if (enif_inspect_binary(env, p.term, &binary)) {
+        args[arg_index] = &ffi_type_pointer;
+        if (!ffi_arg_res->set(binary.data, value_slot)) {
+            return false;
+        }
+        type_index_resindex[args[arg_index]][arg_index] = value_slot;
+    } else if (erlang::nif::get_atom(env, p.term, null_c_ptr) &&
+               (null_c_ptr == "NULL" || null_c_ptr == "nil")) {
+        args[arg_index] = &ffi_type_pointer;
+        if (!ffi_arg_res->set(nullptr, value_slot)) {
+            return false;
+        }
+        type_index_resindex[args[arg_index]][arg_index] = value_slot;
+    } else if (erlang::nif::get_sint64(env, p.term, &ptr)) {
+        args[arg_index] = &ffi_type_pointer;
+        if (!ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
+            return false;
+        }
+        type_index_resindex[args[arg_index]][arg_index] = value_slot;
+    } else {
+        return false;
+    }
+    return true;
 }
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
@@ -630,38 +672,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       for (size_t i = 0; i < args_with_type.size(); ++i) {
         arg_failed = i;
         auto &p = args_with_type[i];
-        size_t value_slot;
-        std::string null_c_ptr;
         if (p.type == "c_ptr") {
-          auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
-          ErlNifBinary binary;
-          int64_t ptr;
-          if (enif_inspect_binary(env, p.term, &binary)) {
-            args[i] = &ffi_type_pointer;
-            if (!ffi_arg_res->set(binary.data, value_slot)) {
-              ready = 0;
-              break;
-            }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else if (erlang::nif::get_atom(env, p.term, null_c_ptr) &&
-                     (null_c_ptr == "NULL" || null_c_ptr == "nil")) {
-            args[i] = &ffi_type_pointer;
-            if (!ffi_arg_res->set(nullptr, value_slot)) {
-                ready = 0;
+            if (!(ready = handle_arg<void *, int64_t>(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
                 break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else if (erlang::nif::get_sint64(env, p.term, &ptr)) {
-            args[i] = &ffi_type_pointer;
-            if (!ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
-              ready = 0;
-              break;
-            }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            break;
-          }
         } else if (p.type == "s8") {
           if (!(ready = handle_arg<int8_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
               break;
@@ -705,6 +719,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         } else if (p.type == "va_args") {
           // todo: handle va_args
           args[i] = &ffi_type_pointer;
+          size_t value_slot;
           auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
           if (!ffi_arg_res->set(nullptr, value_slot)) {
             ready = 0;
@@ -842,6 +857,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (!error_msg.empty()) {
+          free((void *)args);
           return erlang::nif::error(env, error_msg.c_str());
       }
 
@@ -875,11 +891,13 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       } else {
         // todo
         printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
+        free((void *)args);
         free(rc);
         error_msg = "return_type " + return_type + " is not implemented yet";
         return erlang::nif::error(env, error_msg.c_str());
       }
 
+      free((void *)args);
       free(rc);
       return erlang::nif::ok(env, ret);
     } else {
