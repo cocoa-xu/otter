@@ -28,7 +28,7 @@ defmodule Otter.MixProject do
 
   defp deps do
     [
-      {:elixir_make, "~> 0.6"},
+      {:elixir_make, "~> 0.6", runtime: false},
       {:ex_doc, "~> 0.27", only: :dev, runtime: false}
     ]
   end

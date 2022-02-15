@@ -199,6 +199,21 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
     return 1;
 }
 
+static ERL_NIF_TERM otter_symbol_addr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 1) return enif_make_badarg(env);
+
+    OtterSymbol * symbol_res;
+    if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res)) {
+        void * symbol = symbol_res->val;
+        // if it is nullptr, then the return value will be 0
+        // which I'd like to keep it the same as what would have expected to be
+        // if (symbol != nullptr)
+        return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)(*(uint64_t *)symbol)));
+    } else {
+        return erlang::nif::error(env, "cannot get symbol resource");
+    }
+}
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) return enif_make_badarg(env);
 
@@ -410,6 +425,7 @@ static ErlNifFunc nif_functions[] = {
     {"dlopen", 2, otter_dlopen, 0},
     {"dlclose", 1, otter_dlclose, 0},
     {"dlsym", 2, otter_dlsym, 0},
+    {"symbol_addr", 1, otter_symbol_addr, 0},
     {"invoke", 3, otter_invoke, 0},
 };
 
