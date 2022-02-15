@@ -491,6 +491,94 @@ static void free_ffi_res(std::map<ffi_type *, void *> &ffi_res, ffi_type * type)
     }
 }
 
+template <typename T>
+static ffi_type * get_default_ffi_type(T val=0) {
+    return nullptr;
+}
+
+template <>
+ffi_type * get_default_ffi_type(void *) {
+    return &ffi_type_pointer;
+}
+
+template <>
+ffi_type * get_default_ffi_type(uint8_t) {
+    return &ffi_type_uint8;
+}
+
+template <>
+ffi_type * get_default_ffi_type(uint16_t) {
+    return &ffi_type_uint16;
+}
+
+template <>
+ffi_type * get_default_ffi_type(uint32_t) {
+    return &ffi_type_uint32;
+}
+
+template <>
+ffi_type * get_default_ffi_type(uint64_t) {
+    return &ffi_type_uint64;
+}
+
+template <>
+ffi_type * get_default_ffi_type(int8_t) {
+    return &ffi_type_sint8;
+}
+
+template <>
+ffi_type * get_default_ffi_type(int16_t) {
+    return &ffi_type_sint16;
+}
+
+template <>
+ffi_type * get_default_ffi_type(int32_t) {
+    return &ffi_type_sint32;
+}
+
+template <>
+ffi_type * get_default_ffi_type(int64_t) {
+    return &ffi_type_sint64;
+}
+
+template <>
+ffi_type * get_default_ffi_type(float) {
+    return &ffi_type_float;
+}
+
+template <>
+ffi_type * get_default_ffi_type(double) {
+    return &ffi_type_double;
+}
+
+template <typename T, typename ERL_API_T, typename get_nif_term_func = int(*)(ErlNifEnv *, ERL_NIF_TERM, ERL_API_T*)>
+static bool handle_arg(
+        ErlNifEnv *env,
+        get_nif_term_func get_nif_term_value,
+        arg_type &p,
+        ffi_type **&args,
+        size_t arg_index,
+        std::map<ffi_type *, void *> &ffi_res,
+        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex)
+{
+    ERL_API_T value;
+    if (get_nif_term_value(env, p.term, &value)) {
+        args[arg_index] = get_default_ffi_type<T>();
+        auto ffi_arg_res = get_ffi_res<T>(ffi_res, get_default_ffi_type<T>(), true);
+        size_t value_slot = 0;
+        if (ffi_arg_res->set((T)value, value_slot)) {
+            type_index_resindex[args[arg_index]][arg_index] = value_slot;
+            return true;
+        } else {
+            printf("[debug] cannot save value for %s to ffi_arg_res\r\n", p.type.c_str());
+            return false;
+        }
+    } else {
+        printf("[debug] cannot get value for %s\r\n", p.type.c_str());
+        return false;
+    }
+}
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
                                  const ERL_NIF_TERM argv[]) {
   if (argc != 3)
@@ -519,7 +607,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       ffi_cif cif;
       // NOTE: These values are small structs, allocating them on stack should
       // be ok
-      ffi_type *args[args_with_type.size()];
+      ffi_type ** args = (ffi_type **)malloc(sizeof(ffi_type *) * args_with_type.size());
       void *values[args_with_type.size()];
       ffi_type *ffi_return_type;
       size_t return_object_size = sizeof(void *);
@@ -535,16 +623,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       std::map<ffi_type *, std::map<size_t, size_t>> type_index_resindex;
       std::map<ffi_type *, void *> ffi_res;
       get_ffi_res<void *>(ffi_res, &ffi_type_pointer, true);
-      get_ffi_res<uint8_t>(ffi_res, &ffi_type_uint8, true);
-      get_ffi_res<uint16_t>(ffi_res, &ffi_type_uint16, true);
-      get_ffi_res<uint32_t>(ffi_res, &ffi_type_uint32, true);
-      get_ffi_res<uint64_t>(ffi_res, &ffi_type_uint64, true);
-      get_ffi_res<int8_t>(ffi_res, &ffi_type_sint8, true);
-      get_ffi_res<int16_t>(ffi_res, &ffi_type_sint16, true);
-      get_ffi_res<int32_t>(ffi_res, &ffi_type_sint32, true);
-      get_ffi_res<int64_t>(ffi_res, &ffi_type_sint64, true);
-      get_ffi_res<float>(ffi_res, &ffi_type_float, true);
-      get_ffi_res<double>(ffi_res, &ffi_type_double, true);
 
       std::map<size_t, ffi_type> nd_array_type_map;
       int ready = 1;
@@ -585,125 +663,45 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
             break;
           }
         } else if (p.type == "s8") {
-          int sint;
-          if (erlang::nif::get_sint(env, p.term, &sint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<int8_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(sint & 0xFF, value_slot)) {
-              ready = 0;
+          if (!(ready = handle_arg<int8_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
               break;
-            }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
           }
         } else if (p.type == "s16") {
-          int sint;
-          if (erlang::nif::get_sint(env, p.term, &sint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<int16_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(sint & 0xFFFF, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<int16_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
-          }
         } else if (p.type == "s32") {
-          int sint;
-          if (erlang::nif::get_sint(env, p.term, &sint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<int32_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(sint, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<int32_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
-          }
+        } else if (p.type == "s64") {
+            if (!(ready = handle_arg<int64_t, int64_t>(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
+                break;
+            }
         } else if (p.type == "u8") {
-          unsigned int uint;
-          if (erlang::nif::get_uint(env, p.term, &uint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<uint8_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(uint & 0xFF, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<uint8_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
-          }
         } else if (p.type == "u16") {
-          unsigned int uint;
-          if (erlang::nif::get_uint(env, p.term, &uint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<uint16_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(uint & 0xFFFF, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<uint16_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
-          }
         } else if (p.type == "u32") {
-          unsigned int uint;
-          if (erlang::nif::get_uint(env, p.term, &uint)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<uint32_t> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(uint, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<uint32_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            printf("[debug] cannot get value for %s\r\n", p.type.c_str());
-            break;
-          }
+        } else if (p.type == "u64") {
+            if (!(ready = handle_arg<uint64_t, uint64_t>(env, erlang::nif::get_uint64, p, args, i, ffi_res, type_index_resindex))) {
+                break;
+            }
         } else if (p.type == "f32") {
-          double f64;
-          float f32;
-          if (erlang::nif::get_f64(env, p.term, &f64)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<float> *)ffi_res[args[i]];
-            f32 = (float)f64;
-            if (!ffi_arg_res->set(f32, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<float, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            break;
-          }
         } else if (p.type == "f64") {
-          double f64;
-          if (erlang::nif::get_f64(env, p.term, &f64)) {
-            args[i] = str2ffi_type[p.type];
-            auto ffi_arg_res = (ffi_resources<double> *)ffi_res[args[i]];
-            if (!ffi_arg_res->set(f64, value_slot)) {
-              ready = 0;
-              break;
+            if (!(ready = handle_arg<double, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex))) {
+                break;
             }
-            type_index_resindex[args[i]][i] = value_slot;
-          } else {
-            ready = 0;
-            break;
-          }
         } else if (p.type == "va_args") {
           // todo: handle va_args
           args[i] = &ffi_type_pointer;
