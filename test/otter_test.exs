@@ -74,6 +74,7 @@ defmodule OtterTest do
   extern pass_through_s64(:s64, val :: s64)
   extern pass_through_f32(:f32, val :: f32)
   extern pass_through_f64(:f64, val :: f64)
+  extern pass_through_c_ptr(:u64, ptr :: c_ptr)
 
   test "add_two_32" do
     7 = add_two_32!(3, 4)
@@ -110,5 +111,7 @@ defmodule OtterTest do
     -123456789 = pass_through_s64!(-123456789)
     assert 0.001 > abs(123.0125 - pass_through_f32!(123.0125))
     -123.456 = pass_through_f64!(-123.456)
+    0 = pass_through_c_ptr!(0)
+    0xdeadbeef = pass_through_c_ptr!(0xdeadbeef)
   end
 end

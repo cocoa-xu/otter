@@ -174,4 +174,8 @@ float pass_through_f32(float val) {
 double pass_through_f64(double val) {
     return val;
 }
+
+uint64_t pass_through_c_ptr(void * ptr) {
+    return (uint64_t)(uint64_t *)ptr;
+}
 }
