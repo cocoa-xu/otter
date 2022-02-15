@@ -111,10 +111,6 @@ uint32_t receive_complex(struct complex t) {
     );
 }
 
-uint32_t add_two_32(uint32_t a, uint32_t b) {
-    return a + b;
-}
-
 struct matrix16x16 create_matrix16x16() {
     struct matrix16x16 t;
     for (size_t i = 0; i < 16; i++) {
@@ -133,5 +129,49 @@ uint32_t receive_matrix16x16(struct matrix16x16 t) {
         }
     }
     return sum;
+}
+
+uint32_t add_two_32(uint32_t a, uint32_t b) {
+    return a + b;
+}
+
+uint8_t pass_through_u8(uint8_t val) {
+    return val;
+}
+
+uint16_t pass_through_u16(uint16_t val) {
+    return val;
+}
+
+uint32_t pass_through_u32(uint32_t val) {
+    return val;
+}
+
+uint64_t pass_through_u64(uint64_t val) {
+    return val;
+}
+
+int8_t pass_through_s8(int8_t val) {
+    return val;
+}
+
+int16_t pass_through_s16(int16_t val) {
+    return val;
+}
+
+int32_t pass_through_s32(int32_t val) {
+    return val;
+}
+
+int64_t pass_through_s64(int64_t val) {
+    return val;
+}
+
+float pass_through_f32(float val) {
+    return val;
+}
+
+double pass_through_f64(double val) {
+    return val;
 }
 }

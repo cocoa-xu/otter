@@ -63,6 +63,18 @@ defmodule OtterTest do
   extern create_matrix16x16(matrix16x16())
   extern receive_matrix16x16(:u32, t :: matrix16x16())
 
+  # test basic data types
+  extern pass_through_u8(:u8, val :: u8)
+  extern pass_through_u16(:u16, val :: u16)
+  extern pass_through_u32(:u32, val :: u32)
+  extern pass_through_u64(:u64, val :: u64)
+  extern pass_through_s8(:s8, val :: s8)
+  extern pass_through_s16(:s16, val :: s16)
+  extern pass_through_s32(:s32, val :: s32)
+  extern pass_through_s64(:s64, val :: s64)
+  extern pass_through_f32(:f32, val :: f32)
+  extern pass_through_f64(:f64, val :: f64)
+
   test "add_two_32" do
     7 = add_two_32(3, 4)
   end
@@ -85,5 +97,18 @@ defmodule OtterTest do
   test "nd-array" do
     t = create_matrix16x16()
     assert 32640 == receive_matrix16x16(t)
+  end
+
+  test "basic data types" do
+    42 = pass_through_u8(42)
+    65535 = pass_through_u16(65535)
+    0xdeadbeef = pass_through_u32(0xdeadbeef)
+    0xfeedfacedeadbeef = pass_through_u64(0xfeedfacedeadbeef)
+    -42 = pass_through_s8(-42)
+    -32000 = pass_through_s16(-32000)
+    -559038737 = pass_through_s32(0xdeadbeef)
+    -123456789 = pass_through_s64(-123456789)
+    assert 0.001 > abs(123.0125 - pass_through_f32(123.0125))
+    -123.456 = pass_through_f64(-123.456)
   end
 end
