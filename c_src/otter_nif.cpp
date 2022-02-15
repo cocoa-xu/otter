@@ -173,7 +173,6 @@ static ERL_NIF_TERM otter_dlsym(ErlNifEnv *env, int argc, const ERL_NIF_TERM arg
 // TODO: extract a function to prevent segfault
 static std::map<std::string, ffi_type *> str2ffi_type = {
     {"u8", &ffi_type_uint8},
-    {"bool", &ffi_type_uint8},
     {"u16", &ffi_type_uint16},
     {"u32", &ffi_type_uint32},
     {"u64", &ffi_type_uint64},
@@ -350,7 +349,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             void ** ptrs = (void **)malloc(sizeof(void *) * ptrs_cap);
 
             int ready = 1;
-            for (size_t i = 0; i < args_with_type.size(); ++i) {
+            size_t i = 0;
+            for (i = 0; i < args_with_type.size(); ++i) {
                 auto& p = args_with_type[i];
                 std::string null_c_ptr;
                 if (p.second == "c_ptr") {
@@ -428,6 +428,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     }
                 }
             }
+            if (!ready) {
+                return erlang::nif::error(env, ("failed to get input argument #" + std::to_string(i) + ": " + args_with_type[i].second).c_str());
+            }
             if (struct_return_type) {
                 ffi_return_type = &struct_return_type->ffi_struct_type;
             } else if (return_type == "void") {
@@ -457,11 +460,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             } else if (return_type == "c_ptr") {
                 ffi_return_type = &ffi_type_pointer;
             } else {
-                ready = 0;
-            }
-
-            if (!ready) {
-                return erlang::nif::error(env, "failed to get some input arguments");
+                return erlang::nif::error(env, ("failed to get return_type: " + return_type).c_str());
             }
             ERL_NIF_TERM ret;
             if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
