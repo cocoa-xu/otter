@@ -223,16 +223,16 @@ class FFIStructTypeWrapper
 public:
     FFIStructTypeWrapper() = default;
     FFIStructTypeWrapper(FFIStructTypeWrapper &&) = default;
-    FFIStructTypeWrapper(const FFIStructTypeWrapper &) = default;
-    FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &&) = default;
-    FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = default;
+    FFIStructTypeWrapper(const FFIStructTypeWrapper &) = delete;
+    FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &) = delete;
+    FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = delete;
     ~FFIStructTypeWrapper() = default;
     explicit operator bool()
     {
         return finalized;
     }
     void finalize();
-    static FFIStructTypeWrapper create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
+    static FFIStructTypeWrapper* create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
 
     ffi_type ffi_struct_type;
     std::vector<ffi_type*> field_types;
@@ -261,7 +261,7 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                     arg_types_term = tail;
                 }
                 else if (auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, array[1])) {
-                    args_with_type.push_back(std::make_pair(array[0], struct_type.struct_id));
+                    args_with_type.push_back(std::make_pair(array[0], struct_type->struct_id));
                     arg_types_term = tail;
                 }
                 else {
@@ -291,7 +291,7 @@ void FFIStructTypeWrapper::finalize()
 
 static std::map<std::string, FFIStructTypeWrapper> struct_type_wrapper_registry{};
 
-FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term) {
+FFIStructTypeWrapper* FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term) {
     int arity = -1;
     const ERL_NIF_TERM * array;
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
@@ -300,15 +300,15 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
     std::string struct_id;
     erlang::nif::get_atom(env, array[0], struct_atom);
     erlang::nif::get_atom(env, array[1], struct_id);
-    if (!is_size_correct_tuple) return FFIStructTypeWrapper{};
-    if (!(struct_atom == "struct")) return FFIStructTypeWrapper{};
+    if (!is_size_correct_tuple) return nullptr;
+    if (!(struct_atom == "struct")) return nullptr;
     auto wrapper_it = struct_type_wrapper_registry.find(struct_id);
     if (wrapper_it != struct_type_wrapper_registry.end()) {
-        return wrapper_it->second;
+        return &wrapper_it->second;
     }
     FFIStructTypeWrapper wrapper_;
-    auto insert_it = struct_type_wrapper_registry.insert({struct_id, wrapper_});
-    if (!insert_it.second) return FFIStructTypeWrapper{};
+    auto insert_it = struct_type_wrapper_registry.insert({struct_id, std::move(wrapper_)});
+    if (!insert_it.second) return nullptr;
     auto& wrapper = insert_it.first->second;
     wrapper.struct_id = struct_id;
     wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
@@ -322,9 +322,9 @@ FFIStructTypeWrapper FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env, ERL
             }
         }
         wrapper.finalize();
-        return wrapper;
+        return &wrapper;
     }
-    return FFIStructTypeWrapper{};
+    return nullptr;
 }
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
@@ -333,7 +333,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     OtterSymbol * symbol_res;
 
     std::string return_type;
-    FFIStructTypeWrapper struct_return_type{};
+    FFIStructTypeWrapper* struct_return_type;
 
     std::vector<std::pair<ERL_NIF_TERM, std::string>> args_with_type;
     if (erlang::nif::get_atom(env, argv[1], return_type)) {
@@ -439,9 +439,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     }
                 }
             }
-            if (struct_return_type && struct_return_type.finalized) {
+            if (struct_return_type && struct_return_type->finalized) {
                 // struct_return_type.ffi_struct_type.elements = struct_return_type.field_types.data();
-                ffi_return_type = &struct_return_type.ffi_struct_type;
+                ffi_return_type = &struct_return_type->ffi_struct_type;
             } else if (return_type == "void") {
                 ffi_return_type = &ffi_type_void;
             } else if (return_type == "u8") {
@@ -483,7 +483,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
 
             if (struct_return_type) {
-                ret = make_ffi_struct_resource(env, struct_return_type.ffi_struct_type, struct_return_type.resource_type, rc);
+                ret = make_ffi_struct_resource(env, struct_return_type->ffi_struct_type, struct_return_type->resource_type, rc);
             } else if (return_type == "void") {
                 ret = erlang::nif::ok(env);
             } else if (return_type == "u8") {
