@@ -17,7 +17,13 @@ defmodule Otter do
   }
 
   @doc """
-  open
+  dlopen a shared library at given path
+
+  - `path`: if `path` is `nil`, `:RTLD_SELF` or `"RTLD_SELF"`, then open self
+
+     Otherwise, the path will pass to the C function `dlopen` as is.
+
+  - `mode`: dlopen mode. See man (3) dlopen for details.
   """
   def dlopen(nil, mode) when is_atom(mode) do
     dlopen("RTLD_SELF", Map.get(@mode_to_int, mode))
@@ -35,22 +41,69 @@ defmodule Otter do
     Otter.Nif.dlopen(path, mode)
   end
 
+  @doc """
+  Call dlclose to release a opened handle
+
+  Note that the underlying implementation of dlclose and the OS can decide whether to
+  actually unload the shared library.
+
+  - `handle`: The handle of an opened shared library
+  """
   def dlclose(handle) when is_reference(handle) do
     Otter.Nif.dlclose(handle)
   end
 
+  @doc """
+  Find a symbol in an image
+
+  - `image`: A valid image(shared library) handle
+  - `func_name`: The function name to look for in the image.
+  """
   def dlsym(image, func_name) when is_reference(image) and is_binary(func_name) do
     Otter.Nif.dlsym(image, func_name)
   end
 
-  def symbol_addr(symbol) do
-    Otter.Nif.symbol_addr(symbol)
+  @doc """
+  Get the raw address of a symbol.
+  """
+  def symbol_to_address(symbol) do
+    Otter.Nif.symbol_to_address(symbol)
   end
 
+  @doc """
+  Convert the raw address to a symbol. Use with cautions.
+  """
+  def address_to_symbol(address) do
+    Otter.Nif.address_to_symbol(address)
+  end
+
+  @doc """
+  Get current erlang NIF environment
+  """
   def erl_nif_env() do
     Otter.Nif.erl_nif_env()
   end
 
+  @doc """
+  Invoke a symbol(function) with input arguments
+
+  - `symbol`: Function to call
+  - `return_type`: an atom that specifies the function's return type
+  - `args_with_type`: a list of 2-tuples. An example of a valid `args_with_type` when
+     calling cos(3.1415926)
+
+    ```elixir
+    [
+      {3.1415926, %{type: "f64"}}
+    ]
+    ```
+
+    Note that the first element in the tuple should be the value of the input argument, and
+    the second element should be a map.
+
+    The map MUST contain a `type` key, and the corresponding value (either a string or an atom)
+    specifies the type of the first element in the tuple.
+  """
   def invoke(symbol, return_type, args_with_type) do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end
@@ -66,11 +119,11 @@ defmodule Otter do
     defstruct fields: [], id: nil
   end
 
-  def transform_type(%CStruct{fields: fields, id: id}) do
+  defp transform_type(%CStruct{fields: fields, id: id}) do
     {:struct, id, fields}
   end
 
-  def transform_type(name) when is_atom(name) do
+  defp transform_type(name) when is_atom(name) do
     name
   end
 
