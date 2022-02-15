@@ -1,4 +1,12 @@
 # Otter
+
+[![Coverage Status](https://coveralls.io/repos/github/cocoa-xu/otter/badge.svg?branch=main)](https://coveralls.io/github/cocoa-xu/otter?branch=main)
+
+| OS               | arch    | Build Status |
+|------------------|---------|--------------|
+| Ubuntu 20.04     | x86_64  | [![CI](https://github.com/cocoa-xu/otter/actions/workflows/linux-x86_64.yml/badge.svg)](https://github.com/cocoa-xu/otter/actions/workflows/linux-x86_64.yml) |
+| macOS 11 Big Sur | x86_64  | [![CI](https://github.com/cocoa-xu/otter/actions/workflows/macos-x86_64.yml/badge.svg)](https://github.com/cocoa-xu/otter/actions/workflows/macos-x86_64.yml) |
+
 ## Demo
 ```elixir
 defmodule Ctypes do

@@ -1,0 +1,36 @@
+name: linux-x86_64
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature-*
+      - test-*
+      - fix-*
+    paths-ignore:
+      - '**/README.md'
+      - 'examples/**'
+      - '.github/workflows/nerves-*'
+      - '.github/workflows/macos-*'
+  workflow_dispatch:
+
+jobs:
+  mix_test:
+    runs-on: ubuntu-20.04
+    env:
+      MIX_ENV: test
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v2
+      
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 24.2
+          elixir-version: 1.13.2
+
+      - name: Compile and Test
+        run: |
+          mix deps.get
+          mix coveralls.github

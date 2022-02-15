@@ -1,0 +1,34 @@
+name: macos-x86_64
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - test-*
+    paths-ignore:
+      - '**/README.md'
+      - 'examples/**'
+      - '.github/workflows/nerves-*'
+      - '.github/workflows/linux-*.yml'
+      - '.github/workflows/test-*.yml'
+  workflow_dispatch:
+
+jobs:
+  mix_test:
+    runs-on: macos-11
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 24.2
+          elixir-version: 1.13.2
+
+      - name: Compile and Test
+        run: |
+          mix deps.get
+          mix test
