@@ -114,4 +114,16 @@ defmodule OtterTest do
     0 = pass_through_c_ptr!(0)
     0xdeadbeef = pass_through_c_ptr!(0xdeadbeef)
   end
+
+  test "dlopen, dlclose, symbol_to_address and address_to_symbol" do
+    {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
+    {:ok, add_two_32} = Otter.dlsym(image, "add_two_32")
+    {:ok, add_two_32_addr} = Otter.symbol_to_address(add_two_32)
+    {:ok, add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
+    Otter.dlclose(image)
+  end
+
+  test "dlopen self" do
+    {:ok, _image} = Otter.dlopen(nil, :RTLD_NOW)
+  end
 end
