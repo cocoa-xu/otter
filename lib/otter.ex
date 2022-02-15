@@ -41,6 +41,14 @@ defmodule Otter do
     Otter.Nif.dlsym(image, func_name)
   end
 
+  def symbol_addr(symbol) do
+    Otter.Nif.symbol_addr(symbol)
+  end
+
+  def erl_nif_env() do
+    Otter.Nif.erl_nif_env()
+  end
+
   def invoke(symbol, return_type, args_with_type) do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end

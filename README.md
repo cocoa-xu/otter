@@ -51,6 +51,22 @@ iex(7)> dlsym_addr = Ctypes.dlsym(handle, "dlsym")
 7023526352
 ```
 
+Note that we have `Ctypes.dlopen` and `Ctypes.dlsym` in the demo code above. They are declared in the `lib/ctypes_demo.ex`
+file. 
+
+```elixir
+  extern dlopen(:c_ptr, c_ptr, s32)
+  extern dlsym(:c_ptr, c_ptr, c_ptr)
+```
+
+And they are different from the ones in module Otter, namely, `Otter.dlopen` and `Otter.dlsym`. `Ctypes.dl*` are obtained
+by `Otter.dlopen` and `Otter.dlsym`. 
+
+Just like the `sin` and `cos` functions in `Ctypes`, `dlopen` and `dlsym` are also C functions that can be `dlsym`'ed.
+
+`Otter.dl*` calls go to NIFs `otter_dl*` functions while `Ctypes.dl*` calls going to `Otter.invoke` which redirects to 
+the `otter_invoke` NIF.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
