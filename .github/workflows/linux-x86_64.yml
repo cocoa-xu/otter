@@ -33,4 +33,16 @@ jobs:
         run: |
           sudo apt update && sudo apt install libffi-dev pkg-config
           mix deps.get
+          export CFLAGS="-fsanitize=address -g"
+          export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
+          export CMD_ARGS="${CMD:3}"
+          export ERL="$(which erl)"
+          export ERL_BASE="$(dirname $(dirname ${ERL}))"
+          export ELREXEC="$(find "${ERL_BASE}" -name erlexec)"
+          export BINDIR="$(dirname ${ELREXEC})"
+          export START_BOOT="$(find $ERL_BASE -name start.boot | grep -v release)"
+          export ROOTDIR="$(dirname $(dirname ${START_BOOT}))"
+          export EMU=beam
+          bash -c "$ELREXEC $CMD_ARGS test" || true
+          bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
           mix test --max-cases 1
