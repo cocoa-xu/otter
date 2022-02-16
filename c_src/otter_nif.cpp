@@ -666,6 +666,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
   } else if (auto created =
                  FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
     struct_return_type = created;
+    if (struct_return_type == nullptr) {
+        return erlang::nif::error(env, "fail to create_from_tuple");
+    }
   } else {
     return erlang::nif::error(env, "fail to get return_type");
   }
