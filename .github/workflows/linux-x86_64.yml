@@ -46,4 +46,5 @@ jobs:
           export EMU=beam
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
+          unset CFLAGS
           mix test
