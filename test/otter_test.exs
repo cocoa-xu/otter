@@ -16,18 +16,17 @@ defmodule OtterTest do
   extern create_s_u8_u16(s_u8_u16())
   extern receive_s_u8_u16(:u32, s_u8_u16())
 
-  # struct alignas(4) s_vptr {
+  # struct s_uints {
   #     uint8_t u8;
   #     uint16_t u16;
   #     uint32_t u32;
   #     uint64_t u64;
-  #     virtual void ptr_a() {};
   # };
-  cstruct(s_vptr(vptr :: c_ptr, u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
-  extern create_s_vptr(s_vptr())
-  extern receive_s_vptr(:u32, s_vptr())
+  cstruct(s_uints(u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
+  extern create_s_uints(s_uints())
+  extern receive_s_uints(:u32, s_uints())
 
-  # struct complex : public s_vptr {
+  # struct complex {
   #     uint8_t c1;
   #     uint8_t c2;
   #     uint8_t c3[3];
@@ -36,11 +35,8 @@ defmodule OtterTest do
   #         uint16_t u16;
   #     } foo;
   #     struct s_u8_u16 bar;
-  #     virtual void ptr1() {};
-  #     virtual void ptr2() {};
-  #     virtual void ptr3() {};
   # };
-  cstruct(complex(vptr :: c_ptr,
+  cstruct(complex(
     c1 :: u8, c2 :: u8,
     c3 :: u8-size(3), # declare uint8_t c3[3]
     foo :: u16, # todo: needs some improvement, as the size of a union may not be fit in the types we have for now
@@ -84,9 +80,9 @@ defmodule OtterTest do
     assert 1 == receive_s_u8_u16!(t)
   end
 
-  test "s_vptr" do
-    t = create_s_vptr!()
-    assert 1 == receive_s_vptr!(t)
+  test "s_uints" do
+    t = create_s_uints!()
+    assert 1 == receive_s_uints!(t)
   end
 
   test "complex-parallel" do

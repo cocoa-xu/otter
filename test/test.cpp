@@ -7,7 +7,7 @@ struct s_u8_u16 {
     uint16_t u16;
 };
 
-struct s_vptr {
+struct s_uints {
     uint8_t u8;
     uint16_t u16;
     uint32_t u32;
@@ -41,8 +41,8 @@ uint32_t receive_s_u8_u16(struct s_u8_u16 t) {
     return (t.u8 == 'a' && t.u16 == (42 << 10));
 }
 
-struct s_vptr create_s_vptr() {
-    struct s_vptr t;
+struct s_uints create_s_uints() {
+    struct s_uints t;
     t.u8 = 'b';
     t.u16 = 65535;
     t.u32 = 0xdeadbeef;
@@ -50,7 +50,7 @@ struct s_vptr create_s_vptr() {
     return t;
 }
 
-uint32_t receive_s_vptr(struct s_vptr t) {
+uint32_t receive_s_uints(struct s_uints t) {
     return (
         t.u8 == 'b' &&
         t.u16 == 65535 &&
