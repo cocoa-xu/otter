@@ -8,18 +8,25 @@ defmodule OtterTest do
 
   extern add_two_32(:u32, a :: u32, b :: u32)
 
-  # #pragma pack(push, 4)
-  # struct alignas(4) s_u8_u16 {
+  # struct s_u8_u16 {
   #     uint8_t u8;
   #     uint16_t u16;
   # };
-  # #pragma pack(pop)
   cstruct(s_u8_u16(u8 :: u8, u16 :: u16))
   extern create_s_u8_u16(s_u8_u16())
   extern receive_s_u8_u16(:u32, s_u8_u16())
 
-  # #pragma pack(push, 4)
-  # struct alignas(8) complex {
+  # struct s_uints {
+  #     uint8_t u8;
+  #     uint16_t u16;
+  #     uint32_t u32;
+  #     uint64_t u64;
+  # };
+  cstruct(s_uints(u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
+  extern create_s_uints(s_uints())
+  extern receive_s_uints(:u32, s_uints())
+
+  # struct complex {
   #     uint8_t c1;
   #     uint8_t c2;
   #     uint8_t c3[3];
@@ -29,7 +36,6 @@ defmodule OtterTest do
   #     } foo;
   #     struct s_u8_u16 bar;
   # };
-  # #pragma pack(pop)
   cstruct(complex(
     c1 :: u8, c2 :: u8,
     c3 :: u8-size(3), # declare uint8_t c3[3]
@@ -72,6 +78,11 @@ defmodule OtterTest do
   test "s_u8_u16" do
     t = create_s_u8_u16!()
     assert 1 == receive_s_u8_u16!(t)
+  end
+
+  test "s_uints" do
+    t = create_s_uints!()
+    assert 1 == receive_s_uints!(t)
   end
 
   test "complex-parallel" do

@@ -7,6 +7,13 @@ struct s_u8_u16 {
     uint16_t u16;
 };
 
+struct s_uints {
+    uint8_t u8;
+    uint16_t u16;
+    uint32_t u32;
+    uint64_t u64;
+};
+
 struct complex {
     uint8_t c1;
     uint8_t c2;
@@ -32,6 +39,24 @@ struct s_u8_u16 create_s_u8_u16() {
 
 uint32_t receive_s_u8_u16(struct s_u8_u16 t) {
     return (t.u8 == 'a' && t.u16 == (42 << 10));
+}
+
+struct s_uints create_s_uints() {
+    struct s_uints t;
+    t.u8 = 'b';
+    t.u16 = 65535;
+    t.u32 = 0xdeadbeef;
+    t.u64 = 0xfeedfacedeadbeef;
+    return t;
+}
+
+uint32_t receive_s_uints(struct s_uints t) {
+    return (
+        t.u8 == 'b' &&
+        t.u16 == 65535 &&
+        t.u32 == 0xdeadbeef &&
+        t.u64 == 0xfeedfacedeadbeef
+    );
 }
 
 struct complex create_complex() {

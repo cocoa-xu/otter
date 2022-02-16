@@ -8,7 +8,7 @@ TEST_SO = $(TEST_SRC)/test.so
 
 LIBFFI_CFLAGS = -I"$(shell pkg-config --variable=includedir libffi)"
 LIBFFI_LIBS = $(shell pkg-config --libs libffi)
-CPPFLAGS += $(CFLAGS) -std=c++14 -O2 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fPIC
+CPPFLAGS += $(CFLAGS) -std=c++14 -Wall -Wextra -pedantic -fPIC
 LDFLAGS += -shared
 
 UNAME_S := $(shell uname -s)
@@ -21,14 +21,18 @@ endif
 build: clean $(NIF_SO) $(TEST_SO)
 
 clean:
-	@rm -f $(NIF_SO) $(TEST_SO)
+	@ if [ -z "${LD_PRELOAD}" ]; then \
+  		rm -f $(NIF_SO) $(TEST_SO) ; \
+	fi
 
 $(TEST_SO):
-	@ if [ "${MIX_ENV}" = "test" ]; then \
+	@ if [ "${MIX_ENV}" = "test" ] && [ -z "${LD_PRELOAD}" ]; then \
 		$(CC) $(CPPFLAGS) $(LDFLAGS) $(TEST_SRC)/test.cpp -o $(TEST_SO) ; \
 	fi
 
 
 $(NIF_SO):
-	@mkdir -p $(PRIV_DIR)
-	$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) $(LIBFFI_CFLAGS) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO)
+	@ mkdir -p $(PRIV_DIR)
+	@ if [ -z "${LD_PRELOAD}" ]; then \
+		$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) $(LIBFFI_CFLAGS) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO) ; \
+	fi
