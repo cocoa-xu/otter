@@ -511,7 +511,7 @@ template <typename T>
 static void free_ffi_res(std::map<ffi_type *, void *> &ffi_res, ffi_type * type) {
     if (ffi_res.find(type) != ffi_res.end()) {
         auto p = (ffi_resources<T> *)ffi_res[type];
-        delete p;
+        if (p) delete p;
         ffi_res.erase(type);
     }
 }
@@ -591,7 +591,7 @@ static bool handle_arg(
         args[arg_index] = get_default_ffi_type<T>();
         auto ffi_arg_res = get_ffi_res<T>(ffi_res, get_default_ffi_type<T>(), true);
         size_t value_slot = 0;
-        if (ffi_arg_res->set((T)value, value_slot)) {
+        if (ffi_arg_res && ffi_arg_res->set((T)value, value_slot)) {
             type_index_resindex[args[arg_index]][arg_index] = value_slot;
             return true;
         } else {
@@ -687,8 +687,24 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       ffi_cif cif;
       // NOTE: These values are small structs, allocating them on stack should
       // be ok
-      ffi_type ** args = (ffi_type **)malloc(sizeof(ffi_type *) * args_with_type.size());
-      void *values[args_with_type.size()];
+      ffi_type ** args = nullptr;
+      void **values = nullptr;
+      if (args_with_type.size() > 0) {
+          args = (ffi_type **)malloc(sizeof(ffi_type *) * args_with_type.size());
+          if (args == nullptr) {
+              return erlang::nif::error(env, "fail to allocate memory for ffi args");
+          }
+          memset((void*)args, 0, sizeof(ffi_type *) * args_with_type.size());
+
+          values = (void **)malloc(sizeof(void *) * args_with_type.size());
+          if (values == nullptr) {
+              free((void *)args);
+              if (struct_return_type) delete struct_return_type;
+              return erlang::nif::error(env, "fail to allocate memory for ffi values");
+          }
+          memset((void*)values, 0, sizeof(void *) * args_with_type.size());
+      }
+
       ffi_type *ffi_return_type;
       size_t return_object_size = sizeof(void *);
       void *rc = nullptr;
@@ -834,37 +850,70 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
           void * addr = nullptr;
           if (args[i] == &ffi_type_pointer) {
             auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+            if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                error_msg = "invalid ffi resource for a void * arg";
+                break;
+            }
           } else if (args[i] == &ffi_type_uint8) {
             auto ffi_arg_res = (ffi_resources<uint8_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a uint8_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_uint16) {
             auto ffi_arg_res = (ffi_resources<uint16_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a uint16_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_uint32) {
             auto ffi_arg_res = (ffi_resources<uint32_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a uint32_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_uint64) {
             auto ffi_arg_res = (ffi_resources<uint64_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a uint64_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_sint8) {
             auto ffi_arg_res = (ffi_resources<int8_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for an int8_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_sint16) {
             auto ffi_arg_res = (ffi_resources<int16_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for an int16_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_sint32) {
             auto ffi_arg_res = (ffi_resources<int32_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for an int32_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_sint64) {
             auto ffi_arg_res = (ffi_resources<int64_t> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for an int64_t arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_float) {
             auto ffi_arg_res = (ffi_resources<float> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a float arg";
+                  break;
+              }
           } else if (args[i] == &ffi_type_double) {
             auto ffi_arg_res = (ffi_resources<double> *)ffi_res[args[i]];
-            ffi_arg_res->get(slot, values[i]);
+              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
+                  error_msg = "invalid ffi resource for a double arg";
+                  break;
+              }
           }
         }
       }
@@ -895,16 +944,17 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (!error_msg.empty()) {
-          free((void *)args);
+          if (args) free((void *)args);
+          if (values) free((void *)values);
           return erlang::nif::error(env, error_msg.c_str());
       }
 
       if (struct_return_type) {
-        if (!make_ffi_struct_resource(env, return_object_size,
-                                     struct_return_type->resource_type, rc, ret)) {
-            free((void *)args);
-            free(rc);
-            // delete struct_return_type;
+        if (!make_ffi_struct_resource(env, return_object_size, struct_return_type->resource_type, rc, ret)) {
+            if (args) free((void *)args);
+            if (values) free((void *)values);
+            if (rc) free(rc);
+            delete struct_return_type;
             return erlang::nif::error(env, "cannot make_ffi_struct_resource");
         }
       } else if (return_type == "void") {
@@ -932,19 +982,19 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       } else if (return_type == "c_ptr") {
         ret = enif_make_uint64(env, (uint64_t)(*(uint64_t *)rc));
       } else {
-        // todo
-        printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
-        free((void *)args);
-        free(rc);
-        error_msg = "return_type " + return_type + " is not implemented yet";
-        return erlang::nif::error(env, error_msg.c_str());
+          printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
+          if (args) free((void *)args);
+          if (values) free((void *)values);
+          if (rc) free(rc);
+          error_msg = "return_type " + return_type + " is not implemented yet";
+          return erlang::nif::error(env, error_msg.c_str());
       }
-
-      free((void *)args);
-      free(rc);
-      return erlang::nif::ok(env, ret);
+        if (args) free((void *)args);
+        if (values) free((void *)values);
+        if (rc) free(rc);
+        return erlang::nif::ok(env, ret);
     } else {
-      return erlang::nif::error(env, "resource has an invalid handle");
+        return erlang::nif::error(env, "resource has an invalid handle");
     }
   } else {
     return erlang::nif::error(env, "cannot get symbol");
