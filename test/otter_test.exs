@@ -69,33 +69,25 @@ defmodule OtterTest do
     IO.inspect("add_two_32 start")
     7 = add_two_32!(3, 4)
     IO.inspect("add_two_32 end")
-  end
 
-  test "s_u8_u16" do
     IO.inspect("s_u8_u16 start")
     t = create_s_u8_u16!()
     IO.inspect("s_u8_u16 t")
     assert 1 == receive_s_u8_u16!(t)
     IO.inspect("s_u8_u16 end")
-  end
 
-  test "complex" do
     IO.inspect("complex start")
     t = create_complex!()
     IO.inspect("complex t")
     assert 1 == receive_complex!(t)
     IO.inspect("complex end")
-  end
 
-  test "nd-array" do
     IO.inspect("create_matrix16x16 start")
     t = create_matrix16x16!()
     IO.inspect("create_matrix16x16 t")
     assert 32640 == receive_matrix16x16!(t)
     IO.inspect("create_matrix16x16 end")
-  end
 
-  test "basic data types" do
     IO.inspect("bdt start")
     42 = pass_through_u8!(42)
     IO.inspect("bdt 1")
@@ -121,9 +113,7 @@ defmodule OtterTest do
     IO.inspect("bdt 11")
     0xdeadbeef = pass_through_c_ptr!(0xdeadbeef)
     IO.inspect("bdt 12")
-  end
 
-  test "dlopen, dlclose, symbol_to_address and address_to_symbol" do
     IO.inspect("openclose6")
     {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
     IO.inspect("openclose5")
@@ -134,15 +124,11 @@ defmodule OtterTest do
     {:ok, _add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
     IO.inspect("openclose1222")
     IO.inspect("openclose122324532")
-  end
 
-  test "dlopen self" do
     IO.inspect("self start")
     {:ok, _image} = Otter.dlopen(nil, :RTLD_NOW)
     IO.inspect("self end")
-  end
 
-  test "pass function pointer by symbol/address" do
     IO.inspect("func ptr start")
     {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
     multiply =
