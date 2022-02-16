@@ -182,7 +182,9 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
     {"f32", &ffi_type_float},  {"f64", &ffi_type_double},
 };
 
-void resource_dtor(ErlNifEnv *, void *obj) { }
+void resource_dtor(ErlNifEnv *, void *obj) {
+    enif_release_resource(obj);
+}
 
 // NOTE: the basic idea here we register a resource type for each struct type,
 // identified by struct_id.
@@ -216,7 +218,6 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
   auto resource = enif_alloc_resource(resource_type, struct_type.size);
   memcpy(resource, (void *)result, struct_type.size);
   ERL_NIF_TERM res = enif_make_resource(env, resource);
-  enif_release_resource(resource);
   return res;
 }
 
