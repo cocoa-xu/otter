@@ -705,7 +705,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
           memset((void*)values, 0, sizeof(void *) * args_with_type.size());
       }
 
-      ffi_type *ffi_return_type;
+      ffi_type * ffi_return_type = nullptr;
       size_t return_object_size = sizeof(void *);
       void *rc = nullptr;
       void *null_ptr = nullptr;
@@ -917,6 +917,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
                 ready = 0;
                 error_msg = "input argument missing for arg at index " + std::to_string(i);
             }
+        }
+
+        if (ready && ffi_return_type == nullptr) {
+            ready = 0;
+            error_msg = "ffi return type is not initialised properly";
         }
 
         ERL_NIF_TERM ret;
