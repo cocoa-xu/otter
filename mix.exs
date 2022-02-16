@@ -12,7 +12,14 @@ defmodule Otter.MixProject do
       description: description(),
       package: package(),
       deps: deps(),
-      source_url: @github_url
+      source_url: @github_url,
+      test_coverage: [ignore_modules: [Otter.Nif, CtypesDemo], tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
     ]
   end
 
@@ -29,7 +36,8 @@ defmodule Otter.MixProject do
   defp deps do
     [
       {:elixir_make, "~> 0.6", runtime: false},
-      {:ex_doc, "~> 0.27", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.27", only: :dev, runtime: false},
+      {:excoveralls, "~> 0.10", only: :test},
     ]
   end
 
