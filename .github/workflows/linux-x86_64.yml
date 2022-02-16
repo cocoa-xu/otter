@@ -32,7 +32,7 @@ jobs:
 
       - name: Compile and Test
         run: |
-          sudo apt update && sudo apt install libffi-dev pkg-config
+          sudo apt update && sudo apt install libffi-dev pkg-config gdb
           mix deps.get
           export CFLAGS="-fsanitize=address -Og -g3 -DDEBUG_NIF=1 -fno-omit-frame-pointer"
           export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
@@ -51,4 +51,4 @@ jobs:
           sudo sysctl -w kernel.core_pattern="dumped.core"
           mix test || true
           ls ./
-          gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" ${ERL} dumped.core
+          gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" ${ERL} dumped.core || true

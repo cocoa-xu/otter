@@ -197,7 +197,7 @@ static ErlNifResourceType *
 register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
   auto resource_type = enif_open_resource_type(
       env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
-      ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER), nullptr);
+      ERL_NIF_RT_CREATE, nullptr);
   return resource_type;
 }
 
