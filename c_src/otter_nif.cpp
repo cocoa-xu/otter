@@ -961,6 +961,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             return_object_size = ffi_return_type->size;
             if (return_object_size > 0) {
                 rc = malloc(return_object_size);
+                if (struct_return_type) {
+                    printf("[NIF] return_object_size: struct %s: %zu\r\n", struct_return_type->struct_id.c_str(), return_object_size);
+                } else {
+                    printf("[NIF] return_object_size: %s: %zu\r\n", return_type.c_str(), return_object_size);
+                }
                 if (rc == nullptr) {
                     ready = 0;
                     error_msg = "cannot allocate memory for ffi return value";
