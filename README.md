@@ -122,31 +122,6 @@ defmodule Foo do
 end
 ```
 
-### C struct with vtable
-```elixir
-defmodule Foo do
-  import Otter
-  @default_from Path.join([__DIR__, "test.so"])
-  @default_mode :RTLD_NOW
-  
-  # #pragma pack(push, 4)
-  # struct alignas(4) s_vptr {
-  #     uint8_t u8;
-  #     uint16_t u16;
-  #     uint32_t u32;
-  #     uint64_t u64;
-  #     virtual void ptr_a() {};
-  # };
-  # #pragma pack(pop)
-  cstruct(s_vptr(
-    vptr :: c_ptr, 
-    u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
-  # please see test/test.cpp for these extern functions
-  extern create_s_vptr(s_vptr())
-  extern receive_s_vptr(:u32, t :: s_vptr())
-end
-```
-
 ### nd-array in C struct
 ```elixir
 defmodule Foo do
