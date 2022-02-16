@@ -275,12 +275,15 @@ static void * null_ptr_g = nullptr;
 static bool get_args_with_type(
     ErlNifEnv *env, ERL_NIF_TERM arg_types_term,
     std::vector<arg_type> &args_with_type) {
-  if (!enif_is_list(env, arg_types_term))
-    return 0;
+  if (!enif_is_list(env, arg_types_term)) {
+      return 0;
+  }
 
   unsigned int length;
-  if (!enif_get_list_length(env, arg_types_term, &length))
-    return 0;
+  if (!enif_get_list_length(env, arg_types_term, &length)) {
+      return 0;
+  }
+
   args_with_type.reserve(length);
   ERL_NIF_TERM head, tail;
 
