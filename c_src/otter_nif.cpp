@@ -4,6 +4,7 @@
 #include <ffi.h>
 #include <iostream>
 #include <mutex>
+#include <memory>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
