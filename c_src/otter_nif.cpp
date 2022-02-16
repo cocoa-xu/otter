@@ -837,88 +837,87 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
       */
 
-      // fill values
-      for (size_t i = 0; ready && i < args_with_type.size(); i++) {
-        if (type_index_resindex.find(args[i]) != type_index_resindex.end()) {
-          auto &index_resindex = type_index_resindex[args[i]];
-          auto slot = index_resindex[i];
-          void * addr = nullptr;
-          if (args[i] == &ffi_type_pointer) {
-            auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[args[i]];
-            if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                error_msg = "invalid ffi resource for a void * arg";
-                break;
+        // fill values
+        for (size_t i = 0; ready && i < args_with_type.size(); i++) {
+            if (type_index_resindex.find(args[i]) != type_index_resindex.end()) {
+                auto &index_resindex = type_index_resindex[args[i]];
+                auto slot = index_resindex[i];
+                if (args[i] == &ffi_type_pointer) {
+                    auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a void * arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_uint8) {
+                    auto ffi_arg_res = (ffi_resources<uint8_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a uint8_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_uint16) {
+                    auto ffi_arg_res = (ffi_resources<uint16_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a uint16_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_uint32) {
+                    auto ffi_arg_res = (ffi_resources<uint32_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a uint32_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_uint64) {
+                    auto ffi_arg_res = (ffi_resources<uint64_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a uint64_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_sint8) {
+                    auto ffi_arg_res = (ffi_resources<int8_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for an int8_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_sint16) {
+                    auto ffi_arg_res = (ffi_resources<int16_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for an int16_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_sint32) {
+                    auto ffi_arg_res = (ffi_resources<int32_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for an int32_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_sint64) {
+                    auto ffi_arg_res = (ffi_resources<int64_t> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for an int64_t arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_float) {
+                    auto ffi_arg_res = (ffi_resources<float> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a float arg";
+                        break;
+                    }
+                } else if (args[i] == &ffi_type_double) {
+                    auto ffi_arg_res = (ffi_resources<double> *)ffi_res[args[i]];
+                    if (!(ready = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
+                        error_msg = "invalid ffi resource for a double arg";
+                        break;
+                    }
+                }
             }
-          } else if (args[i] == &ffi_type_uint8) {
-            auto ffi_arg_res = (ffi_resources<uint8_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a uint8_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_uint16) {
-            auto ffi_arg_res = (ffi_resources<uint16_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a uint16_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_uint32) {
-            auto ffi_arg_res = (ffi_resources<uint32_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a uint32_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_uint64) {
-            auto ffi_arg_res = (ffi_resources<uint64_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a uint64_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_sint8) {
-            auto ffi_arg_res = (ffi_resources<int8_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for an int8_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_sint16) {
-            auto ffi_arg_res = (ffi_resources<int16_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for an int16_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_sint32) {
-            auto ffi_arg_res = (ffi_resources<int32_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for an int32_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_sint64) {
-            auto ffi_arg_res = (ffi_resources<int64_t> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for an int64_t arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_float) {
-            auto ffi_arg_res = (ffi_resources<float> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a float arg";
-                  break;
-              }
-          } else if (args[i] == &ffi_type_double) {
-            auto ffi_arg_res = (ffi_resources<double> *)ffi_res[args[i]];
-              if (!(ready = ffi_arg_res->get(slot, values[i]))) {
-                  error_msg = "invalid ffi resource for a double arg";
-                  break;
-              }
-          }
         }
-      }
 
-      for (size_t i = 0; i < args_with_type.size(); i++) {
-          if (values[i] == nullptr) {
-              ready = 0;
-              error_msg = "input argument missing for arg at index " + std::to_string(i);
-          }
-      }
+        for (size_t i = 0; i < args_with_type.size(); i++) {
+            if (values[i] == nullptr) {
+                ready = 0;
+                error_msg = "input argument missing for arg at index " + std::to_string(i);
+            }
+        }
 
         ERL_NIF_TERM ret;
         if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
@@ -959,7 +958,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
             return erlang::nif::error(env, error_msg.c_str());
         }
 
-        if (return_object_size > 0 && rc) {
+        if (return_object_size && rc) {
             if (struct_return_type) {
                 if (!make_ffi_struct_resource(env, return_object_size, struct_return_type->resource_type, rc, ret)) {
                     if (args) free((void *)args);
@@ -1000,7 +999,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
                 error_msg = "return_type " + return_type + " is not implemented yet";
                 return erlang::nif::error(env, error_msg.c_str());
             }
+        } else {
+            ret = erlang::nif::ok(env);
         }
+
         if (args) free((void *)args);
         if (values) free((void *)values);
         if (rc) free(rc);
