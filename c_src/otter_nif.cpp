@@ -373,11 +373,15 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
   erlang::nif::get_atom(env, array[0], struct_atom);
   erlang::nif::get_atom(env, array[1], struct_id);
     printf("here %d\r\n", __LINE__);
-  if (!is_size_correct_tuple)
-    return nullptr;
-  if (!(struct_atom == "struct"))
-    return nullptr;
-    printf("here %d\r\n", __LINE__);
+  if (!is_size_correct_tuple) {
+      return nullptr;
+  }
+
+  if (!(struct_atom == "struct")) {
+      return nullptr;
+  }
+
+printf("here %d\r\n", __LINE__);
   auto wrapper_it = struct_type_wrapper_registry.find(struct_id);
   if (wrapper_it != struct_type_wrapper_registry.end()) {
       printf("here %d\r\n", __LINE__);
@@ -934,7 +938,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       } else if (return_type == "u32") {
           printf("here %d,  ret: %d\r\n", __LINE__, ret);
         ret = enif_make_uint(env, *(uint32_t *)rc);
-        printf("here %d, *(uint32_t *)rc: %d, ret: %d\r\n", *__LINE__, (uint32_t *)rc, ret);
+        printf("here %d, *(uint32_t *)rc: %d, ret: %d\r\n", __LINE__, (uint32_t *)rc, ret);
       } else if (return_type == "s32") {
         ret = enif_make_int(env, *(int32_t *)rc);
       } else if (return_type == "u64") {
