@@ -3,6 +3,7 @@
 #include <erl_nif.h>
 #include <ffi.h>
 #include <iostream>
+#include <mutex>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
