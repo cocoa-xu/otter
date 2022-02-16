@@ -409,7 +409,7 @@ static ERL_NIF_TERM otter_symbol_to_address(ErlNifEnv *env, int argc, const ERL_
     // if it is nullptr, then the return value will be 0
     // which I'd like to keep it the same as what would have expected to be
     // if (symbol != nullptr)
-    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)(*(uint64_t *)symbol)));
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)symbol)));
   } else {
     return erlang::nif::error(env, "cannot get symbol resource");
   }
@@ -424,7 +424,9 @@ static ERL_NIF_TERM otter_address_to_symbol(ErlNifEnv *env, int argc,
     if (erlang::nif::get_uint64(env, argv[0], &address)) {
         if (alloc_resource(&symbol_res)) {
             symbol_res->val = (void *)(uint64_t *)address;
-            return erlang::nif::ok(env, enif_make_resource(env, symbol_res));
+            ERL_NIF_TERM res = enif_make_resource(env, symbol_res);
+            enif_release_resource(symbol_res);
+            return erlang::nif::ok(env, res);
         } else {
             return erlang::nif::error(env, "cannot allocate memory for resource");
         }
@@ -594,24 +596,32 @@ static bool handle_arg(
     }
 }
 
-template <>
-bool handle_arg(
+static bool handle_c_ptr_arg(
         ErlNifEnv *env,
         int(*get_nif_term_value)(ErlNifEnv *, ERL_NIF_TERM, int64_t *),
         arg_type &p,
         ffi_type **&args,
         size_t arg_index,
         std::map<ffi_type *, void *> &ffi_res,
-        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex, void * _unused)
+        std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex)
 {
     auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
     // if enif_inspect_binary succeeded,
     // `binary.data` will live until we return to erlang
     ErlNifBinary binary;
-    int64_t ptr;
+    uint64_t ptr;
     size_t value_slot = 0;
     std::string null_c_ptr;
-    if (enif_inspect_binary(env, p.term, &binary)) {
+    OtterSymbol *symbol_res;
+
+    if (enif_get_resource(env, p.term, OtterSymbol::type, (void **)&symbol_res)) {
+        void *symbol = symbol_res->val;
+        args[arg_index] = &ffi_type_pointer;
+        if (!ffi_arg_res->set(symbol, value_slot)) {
+            return false;
+        }
+        type_index_resindex[args[arg_index]][arg_index] = value_slot;
+    } else if (enif_inspect_binary(env, p.term, &binary)) {
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set(binary.data, value_slot)) {
             return false;
@@ -624,7 +634,7 @@ bool handle_arg(
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
-    } else if (erlang::nif::get_sint64(env, p.term, &ptr)) {
+    } else if (erlang::nif::get_uint64(env, p.term, &ptr)) {
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
             return false;
@@ -688,7 +698,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         arg_failed = i;
         auto &p = args_with_type[i];
         if (p.type == "c_ptr") {
-            if (!(ready = handle_arg<void *, int64_t>(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
+            if (!(ready = handle_c_ptr_arg(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
                 break;
             }
         } else if (p.type == "s8") {
