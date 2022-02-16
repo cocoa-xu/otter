@@ -313,7 +313,6 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                 enif_get_map_value(env, arg_type_info, enif_make_atom(env, "type"), &type_term);
                 if (erlang::nif::get_atom(env, type_term, arg_type_str) ||
                     erlang::nif::get(env, type_term, arg_type_str)) {
-                    printf("ok %d\r\n", __LINE__);
                     // {arg_value, %{type: type_term}}
                     // {arg_value, %{type: type_term, size: size_term}}
 
@@ -363,7 +362,6 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
 
                     arg_types_term = tail;
                 } else if (enif_is_tuple(env, type_term)) {
-                    printf("ok %d\r\n", __LINE__);
                     auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term, wrappers);
                     args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
                     arg_types_term = tail;
@@ -371,12 +369,10 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                 } else {
                     auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info, wrappers);
                     if (struct_type) {
-                        printf("ok %d\r\n", __LINE__);
                         args_with_type.emplace_back(arg_value, arg_type_info, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
                         wrappers.push_back(struct_type);
                         arg_types_term = tail;
                     } else {
-                        printf("ok %d\r\n", __LINE__);
                         return 0;
                     }
                 }
