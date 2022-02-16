@@ -32,7 +32,6 @@ struct matrix16x16 {
 extern "C" {
 struct s_u8_u16 create_s_u8_u16() {
     struct s_u8_u16 t;
-    printf("[SO] sizeof(struct s_u8_u16): %zu\r\n", sizeof(struct s_u8_u16));
     t.u8 = 'a';
     t.u16 = 42 << 10; // 43008
     return t;
@@ -44,7 +43,6 @@ uint32_t receive_s_u8_u16(struct s_u8_u16 t) {
 
 struct s_uints create_s_uints() {
     struct s_uints t;
-    printf("[SO] sizeof(struct s_uints): %zu\r\n", sizeof(struct s_uints));
     t.u8 = 'b';
     t.u16 = 65535;
     t.u32 = 0xdeadbeef;
@@ -63,7 +61,6 @@ uint32_t receive_s_uints(struct s_uints t) {
 
 struct complex create_complex() {
     struct complex t;
-    printf("[SO] sizeof(struct complex): %zu\r\n", sizeof(struct complex));
     t.c1 = 'c';
     t.c2 = 'd';
     t.c3[0] = 'e';
@@ -90,7 +87,6 @@ uint32_t receive_complex(struct complex t) {
 
 struct matrix16x16 create_matrix16x16() {
     struct matrix16x16 t;
-    printf("[SO] sizeof(struct matrix16x16): %zu\r\n", sizeof(struct matrix16x16));
     for (size_t i = 0; i < 16; i++) {
         for (size_t j = 0; j < 16; ++j) {
             t.m[i][j] = 16 * i + j;
