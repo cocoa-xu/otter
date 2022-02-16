@@ -625,26 +625,26 @@ static bool handle_c_ptr_arg(
     if (enif_get_resource(env, p.term, OtterSymbol::type, (void **)&symbol_res)) {
         void *symbol = symbol_res->val;
         args[arg_index] = &ffi_type_pointer;
-        if (!ffi_arg_res->set(symbol, value_slot)) {
+        if (ffi_arg_res == nullptr || !ffi_arg_res->set(symbol, value_slot)) {
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (enif_inspect_binary(env, p.term, &binary)) {
         args[arg_index] = &ffi_type_pointer;
-        if (!ffi_arg_res->set(binary.data, value_slot)) {
+        if (ffi_arg_res == nullptr || !ffi_arg_res->set(binary.data, value_slot)) {
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (erlang::nif::get_atom(env, p.term, null_c_ptr) &&
                (null_c_ptr == "NULL" || null_c_ptr == "nil")) {
         args[arg_index] = &ffi_type_pointer;
-        if (!ffi_arg_res->set(nullptr, value_slot)) {
+        if (ffi_arg_res == nullptr || !ffi_arg_res->set(nullptr, value_slot)) {
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (erlang::nif::get_uint64(env, p.term, &ptr)) {
         args[arg_index] = &ffi_type_pointer;
-        if (!ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
+        if (ffi_arg_res == nullptr || !ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
@@ -654,12 +654,12 @@ static bool handle_c_ptr_arg(
     return true;
 }
 
-static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
-                                 const ERL_NIF_TERM argv[]) {
-  if (argc != 3)
-    return enif_make_badarg(env);
+static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+      return enif_make_badarg(env);
+  }
 
-  OtterSymbol *symbol_res;
+  OtterSymbol *symbol_res = nullptr;
 
   std::string return_type;
   FFIStructTypeWrapper *struct_return_type = nullptr;
@@ -676,8 +676,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
     return erlang::nif::error(env, "fail to get return_type");
   }
 
-  if (enif_get_resource(env, argv[0], OtterSymbol::type,
-                        (void **)&symbol_res)) {
+  if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res)) {
     if (!get_args_with_type(env, argv[2], args_with_type)) {
         return erlang::nif::error(env, "fail to get args_with_type");
     }
@@ -708,7 +707,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       ffi_type * ffi_return_type = nullptr;
       size_t return_object_size = sizeof(void *);
       void *rc = nullptr;
-      void *null_ptr = nullptr;
       std::string error_msg;
 
       // type_index_resindex (resource pool)
@@ -915,7 +913,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         for (size_t i = 0; i < args_with_type.size(); i++) {
             if (values[i] == nullptr) {
                 ready = 0;
-                error_msg = "input argument missing for arg at index " + std::to_string(i);
+                error_msg = "input argument value missing for arg at index " + std::to_string(i);
+            }
+
+            if (args[i] == nullptr) {
+                ready = 0;
+                error_msg = "input argument type missing for arg at index " + std::to_string(i);
             }
         }
 
