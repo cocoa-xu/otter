@@ -664,26 +664,24 @@ static bool handle_c_ptr_arg(
 }
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-      return enif_make_badarg(env);
-  }
-
-  OtterSymbol *symbol_res = nullptr;
-
-  std::string return_type;
-  FFIStructTypeWrapper *struct_return_type = nullptr;
-
-  std::vector<arg_type> args_with_type;
-  if (erlang::nif::get_atom(env, argv[1], return_type)) {
-    // Do nothing
-  } else if (auto created = FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
-    struct_return_type = created;
-    if (struct_return_type == nullptr) {
-        return erlang::nif::error(env, "fail to create_from_tuple");
+    if (argc != 3) {
+        return enif_make_badarg(env);
     }
-  } else {
-    return erlang::nif::error(env, "fail to get return_type");
-  }
+
+    OtterSymbol *symbol_res = nullptr;
+
+    std::string return_type;
+    FFIStructTypeWrapper *struct_return_type = nullptr;
+
+    std::vector<arg_type> args_with_type;
+    if (erlang::nif::get_atom(env, argv[1], return_type) && !return_type.empty()) {
+        // Do nothing
+    } else {
+        struct_return_type = FFIStructTypeWrapper::create_from_tuple(env, argv[1]);
+        if (struct_return_type == nullptr) {
+            return erlang::nif::error(env, "fail to create_from_tuple");
+        }
+    }
 
   if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res)) {
     if (!get_args_with_type(env, argv[2], args_with_type)) {
