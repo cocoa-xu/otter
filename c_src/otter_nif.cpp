@@ -372,30 +372,40 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
   std::string struct_id;
   erlang::nif::get_atom(env, array[0], struct_atom);
   erlang::nif::get_atom(env, array[1], struct_id);
+    printf("here %d\r\n", __LINE__);
   if (!is_size_correct_tuple)
     return nullptr;
   if (!(struct_atom == "struct"))
     return nullptr;
+    printf("here %d\r\n", __LINE__);
   auto wrapper_it = struct_type_wrapper_registry.find(struct_id);
   if (wrapper_it != struct_type_wrapper_registry.end()) {
+      printf("here %d\r\n", __LINE__);
     return &wrapper_it->second;
   }
   if (get_args_with_type(env, array[2], args_with_type)) {
+      printf("here %d\r\n", __LINE__);
     auto insert_it = struct_type_wrapper_registry.emplace(
         struct_id, FFIStructTypeWrapper(args_with_type.size() + 1));
+      printf("here %d\r\n", __LINE__);
     if (!insert_it.second)
       return nullptr;
+      printf("here %d\r\n", __LINE__);
     auto &wrapper = insert_it.first->second;
 
     wrapper.struct_id = struct_id;
+      printf("here %d\r\n", __LINE__);
     wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
+      printf("here %d\r\n", __LINE__);
     for (size_t i = 0; i < args_with_type.size(); ++i) {
       auto &p = args_with_type[i];
       wrapper.field_types[i] = &p.ffi_arg_type;
     }
+      printf("here %d\r\n", __LINE__);
     wrapper.field_types[args_with_type.size()] = nullptr;
     return &wrapper;
   }
+    printf("here %d\r\n", __LINE__);
   return nullptr;
 }
 
@@ -577,6 +587,7 @@ static bool handle_arg(
         std::map<ffi_type *, void *> &ffi_res,
         std::map<ffi_type *, std::map<size_t, size_t>> &type_index_resindex, T _unused=0)
 {
+printf("here %d, FUNC: %s\r\n", __LINE__, __PRETTY_FUNCTION__);
     ERL_API_T value;
     if (get_nif_term_value(env, p.term, &value)) {
         args[arg_index] = get_default_ffi_type<T>();
@@ -612,8 +623,9 @@ static bool handle_c_ptr_arg(
     size_t value_slot = 0;
     std::string null_c_ptr;
     OtterSymbol *symbol_res;
-
+printf("here %d\r\n", __LINE__);
     if (enif_get_resource(env, p.term, OtterSymbol::type, (void **)&symbol_res)) {
+printf("here %d\r\n", __LINE__);
         void *symbol = symbol_res->val;
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set(symbol, value_slot)) {
@@ -621,6 +633,7 @@ static bool handle_c_ptr_arg(
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (enif_inspect_binary(env, p.term, &binary)) {
+printf("here %d\r\n", __LINE__);
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set(binary.data, value_slot)) {
             return false;
@@ -628,12 +641,14 @@ static bool handle_c_ptr_arg(
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (erlang::nif::get_atom(env, p.term, null_c_ptr) &&
                (null_c_ptr == "NULL" || null_c_ptr == "nil")) {
+printf("here %d\r\n", __LINE__);
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set(nullptr, value_slot)) {
             return false;
         }
         type_index_resindex[args[arg_index]][arg_index] = value_slot;
     } else if (erlang::nif::get_uint64(env, p.term, &ptr)) {
+printf("here %d\r\n", __LINE__);
         args[arg_index] = &ffi_type_pointer;
         if (!ffi_arg_res->set((void *)(int64_t *)(ptr), value_slot)) {
             return false;
@@ -642,6 +657,7 @@ static bool handle_c_ptr_arg(
     } else {
         return false;
     }
+printf("here %d\r\n", __LINE__);
     return true;
 }
 
@@ -650,26 +666,35 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
   if (argc != 3)
     return enif_make_badarg(env);
 
+  printf("here %d\r\n", __LINE__);
   OtterSymbol *symbol_res;
 
   std::string return_type;
   FFIStructTypeWrapper *struct_return_type = nullptr;
 
   std::vector<arg_type> args_with_type;
+    printf("here %d\r\n", __LINE__);
   if (erlang::nif::get_atom(env, argv[1], return_type)) {
+      printf("here %d\r\n", __LINE__);
     // Do nothing
   } else if (auto created =
                  FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
+      printf("here %d\r\n", __LINE__);
     struct_return_type = created;
   } else {
+      printf("here %d\r\n", __LINE__);
     return erlang::nif::error(env, "fail to get return_type");
   }
   if (enif_get_resource(env, argv[0], OtterSymbol::type,
                         (void **)&symbol_res)) {
-    if (!get_args_with_type(env, argv[2], args_with_type))
+      printf("here %d\r\n", __LINE__);
+    if (!get_args_with_type(env, argv[2], args_with_type)) {
+        printf("here %d\r\n", __LINE__);
       return erlang::nif::error(env, "fail to get args_with_type");
+    }
     void *symbol = symbol_res->val;
     if (symbol != nullptr) {
+        printf("here %d\r\n", __LINE__);
       ffi_cif cif;
       // NOTE: These values are small structs, allocating them on stack should
       // be ok
@@ -680,6 +705,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       void *rc = nullptr;
       void *null_ptr = nullptr;
       std::string error_msg;
+        printf("here %d\r\n", __LINE__);
 
       // type_index_resindex (resource pool)
       //   key: type
@@ -689,12 +715,13 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       std::map<ffi_type *, std::map<size_t, size_t>> type_index_resindex;
       std::map<ffi_type *, void *> ffi_res;
       get_ffi_res<void *>(ffi_res, &ffi_type_pointer, true);
-
+        printf("here %d\r\n", __LINE__);
       std::map<size_t, ffi_type> nd_array_type_map;
       int ready = 1;
       size_t arg_failed = 0;
       for (size_t i = 0; i < args_with_type.size(); ++i) {
         arg_failed = i;
+          printf("here %d\r\n", __LINE__);
         auto &p = args_with_type[i];
         if (p.type == "c_ptr") {
             if (!(ready = handle_c_ptr_arg(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
@@ -815,6 +842,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       // fill values
       for (size_t i = 0; ready && i < args_with_type.size(); i++) {
         if (type_index_resindex.find(args[i]) != type_index_resindex.end()) {
+            printf("here %d\r\n", __LINE__);
           auto &index_resindex = type_index_resindex[args[i]];
           auto slot = index_resindex[i];
           void * addr = nullptr;
@@ -858,10 +886,13 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       ERL_NIF_TERM ret;
       if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(),
                        ffi_return_type, args) == FFI_OK) {
+          printf("here %d\r\n", __LINE__);
         // size here gets updated by ffi_prep_cif
         return_object_size = ffi_return_type->size;
+          printf("here %d return_object_size: %zu\r\n", __LINE__, return_object_size);
         rc = malloc(return_object_size);
         ffi_call(&cif, (void (*)())symbol, rc, values);
+          printf("here %d ffi_called\r\n", __LINE__);
 
         free_ffi_res<void *>(ffi_res, &ffi_type_pointer);
         free_ffi_res<uint8_t>(ffi_res, &ffi_type_uint8);
@@ -886,8 +917,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (struct_return_type) {
+          printf("here %d\r\n", __LINE__);
         ret = make_ffi_struct_resource(env, struct_return_type->ffi_struct_type,
                                        struct_return_type->resource_type, rc);
+          printf("here %d\r\n", __LINE__);
       } else if (return_type == "void") {
         ret = erlang::nif::ok(env);
       } else if (return_type == "u8") {
@@ -921,8 +954,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         return erlang::nif::error(env, error_msg.c_str());
       }
 
+        printf("here %d\r\n", __LINE__);
       free((void *)args);
       free(rc);
+        printf("here %d\r\n", __LINE__);
       return erlang::nif::ok(env, ret);
     } else {
       return erlang::nif::error(env, "resource has an invalid handle");
