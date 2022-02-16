@@ -32,6 +32,6 @@ jobs:
 
       - name: Compile and Test
         run: |
-          sudo apt update && sudo apt install libffi-dev
+          sudo apt update && sudo apt install libffi-dev pkg-config
           mix deps.get
           mix coveralls.github

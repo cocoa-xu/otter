@@ -27,7 +27,7 @@ jobs:
         run: |
           brew install erlang
           brew install elixir
-          brew install libffi
+          brew install libffi pkg-config
           mix local.hex --force
           mix local.rebar --force
 

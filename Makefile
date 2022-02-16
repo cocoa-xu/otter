@@ -32,4 +32,4 @@ $(TEST_SO):
 
 $(NIF_SO):
 	@mkdir -p $(PRIV_DIR)
-	@$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) $(LIBFFI_CFLAGS) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO)
+	$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) $(LIBFFI_CFLAGS) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO)

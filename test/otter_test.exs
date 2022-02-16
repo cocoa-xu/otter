@@ -19,20 +19,7 @@ defmodule OtterTest do
   extern receive_s_u8_u16(:u32, t :: s_u8_u16())
 
   # #pragma pack(push, 4)
-  # struct alignas(4) s_vptr {
-  #     uint8_t u8;
-  #     uint16_t u16;
-  #     uint32_t u32;
-  #     uint64_t u64;
-  #     virtual void ptr_a() {};
-  # };
-  # #pragma pack(pop)
-  cstruct(s_vptr(vptr :: c_ptr, u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
-  extern create_s_vptr(s_vptr())
-  extern receive_s_vptr(:u32, t :: s_vptr())
-
-  # #pragma pack(push, 4)
-  # struct alignas(8) complex : public s_vptr {
+  # struct alignas(8) complex {
   #     uint8_t c1;
   #     uint8_t c2;
   #     uint8_t c3[3];
@@ -41,13 +28,9 @@ defmodule OtterTest do
   #         uint16_t u16;
   #     } foo;
   #     struct s_u8_u16 bar;
-  #     virtual void ptr1() {};
-  #     virtual void ptr2() {};
-  #     virtual void ptr3() {};
   # };
   # #pragma pack(pop)
-  cstruct(complex(vptr :: c_ptr,
-    u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64, padding_1 :: u16, padding_2 :: u8, # todo: how to inherit from s_vptr
+  cstruct(complex(
     c1 :: u8, c2 :: u8,
     c3 :: u8-size(3), # declare uint8_t c3[3]
     foo :: u16, # todo: needs some improvement, as the size of a union may not be fit in the types we have for now
@@ -91,11 +74,6 @@ defmodule OtterTest do
     assert 1 == receive_s_u8_u16!(t)
   end
 
-  test "s_vptr" do
-    t = create_s_vptr!()
-    assert 1 == receive_s_vptr!(t)
-  end
-
   test "complex" do
     t = create_complex!()
     assert 1 == receive_complex!(t)
@@ -126,7 +104,7 @@ defmodule OtterTest do
     {:ok, add_two_32} = Otter.dlsym(image, "add_two_32")
     {:ok, add_two_32_addr} = Otter.symbol_to_address(add_two_32)
     {:ok, _add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
-#    Otter.dlclose(image)
+    Otter.dlclose(image)
   end
 
   test "dlopen self" do
