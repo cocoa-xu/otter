@@ -4,6 +4,7 @@
 #include <ffi.h>
 #include <iostream>
 #include <mutex>
+#include <memory>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -221,7 +222,7 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
                                              size_t return_object_size,
                                              ErlNifResourceType *resource_type,
                                              void *result, ERL_NIF_TERM &ret) {
-    if (resource_type) {
+    if (resource_type && return_object_size && result) {
         auto resource = enif_alloc_resource(resource_type, return_object_size);
         if (resource) {
             memcpy(resource, (void *)result, return_object_size);
@@ -238,7 +239,8 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
 
 class FFIStructTypeWrapper {
 public:
-  FFIStructTypeWrapper(size_t field_size) : field_types(field_size) {
+  FFIStructTypeWrapper(size_t field_size) {
+      field_types.resize(field_size);
     ffi_struct_type.size = 0;      // set by libffi, initialize it to zero
     ffi_struct_type.alignment = 0; // set by libffi, initialize it to zero
     ffi_struct_type.type = FFI_TYPE_STRUCT;
@@ -249,8 +251,8 @@ public:
   FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &) = delete;
   FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = delete;
   ~FFIStructTypeWrapper() = default;
-  static FFIStructTypeWrapper *
-  create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, std::vector<FFIStructTypeWrapper *> &wrappers);
+  static std::shared_ptr<FFIStructTypeWrapper>
+  create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers);
 
   ffi_type ffi_struct_type;
   ErlNifResourceType *resource_type;
@@ -285,107 +287,109 @@ static void * null_ptr_g = nullptr;
 
 // NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in
 // this func we convert it to id
-static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type, std::vector<FFIStructTypeWrapper *> &wrappers) {
-  if (!enif_is_list(env, arg_types_term)) {
-      return 0;
-  }
+static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers) {
+    if (!enif_is_list(env, arg_types_term)) {
+        return 0;
+    }
 
-  unsigned int length;
-  if (!enif_get_list_length(env, arg_types_term, &length)) {
-      return 0;
-  }
+    unsigned int length;
+    if (!enif_get_list_length(env, arg_types_term, &length)) {
+        return 0;
+    }
 
-  args_with_type.reserve(length);
-  ERL_NIF_TERM head, tail;
+    args_with_type.reserve(length);
+    ERL_NIF_TERM head, tail;
 
-  while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
-    if (enif_is_tuple(env, head)) {
-      int arity;
-      const ERL_NIF_TERM *array;
-      if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
-        std::string arg_type_str;
-          ERL_NIF_TERM arg_value = array[0];
-          ERL_NIF_TERM arg_type_info = array[1];
+    while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
+        if (enif_is_tuple(env, head)) {
+            int arity;
+            const ERL_NIF_TERM *array;
+            if (enif_get_tuple(env, head, &arity, &array) && arity == 2) {
+                std::string arg_type_str;
+                ERL_NIF_TERM arg_value = array[0];
+                ERL_NIF_TERM arg_type_info = array[1];
 
-        ERL_NIF_TERM type_term;
-        enif_get_map_value(env, arg_type_info, enif_make_atom(env, "type"), &type_term);
-        if (erlang::nif::get_atom(env, type_term, arg_type_str) ||
-                 erlang::nif::get(env, type_term, arg_type_str))
-        {
-            // {arg_value, %{type: type_term}}
-            // {arg_value, %{type: type_term, size: size_term}}
+                ERL_NIF_TERM type_term;
+                enif_get_map_value(env, arg_type_info, enif_make_atom(env, "type"), &type_term);
+                if (erlang::nif::get_atom(env, type_term, arg_type_str) ||
+                    erlang::nif::get(env, type_term, arg_type_str)) {
+                    // {arg_value, %{type: type_term}}
+                    // {arg_value, %{type: type_term, size: size_term}}
 
-            // ignore error as `size` will stay 0 if key `size` is not in the map
-            uint64_t size = 0;
-            ERL_NIF_TERM size_term;
-            if (enif_get_map_value(env, arg_type_info, enif_make_atom(env, "size"), &size_term)) {
-                erlang::nif::get_uint64(env, size_term, &size);
+                    // ignore error as `size` will stay 0 if key `size` is not in the map
+                    uint64_t size = 0;
+                    ERL_NIF_TERM size_term;
+                    if (enif_get_map_value(env, arg_type_info, enif_make_atom(env, "size"), &size_term)) {
+                        erlang::nif::get_uint64(env, size_term, &size);
+                    }
+                    args_with_type.emplace_back(arg_value, type_term, arg_type_str, size, arg_type_info);
+                    auto &arg_with_type = args_with_type[args_with_type.size() - 1];
+                    if (arg_with_type.type == "c_ptr") {
+                        arg_with_type.ffi_arg_type = ffi_type_pointer;
+                    } else if (arg_with_type.type == "s8") {
+                        arg_with_type.ffi_arg_type = ffi_type_sint8;
+                    } else if (arg_with_type.type == "s16") {
+                        arg_with_type.ffi_arg_type = ffi_type_sint16;
+                    } else if (arg_with_type.type == "s32") {
+                        arg_with_type.ffi_arg_type = ffi_type_sint32;
+                    } else if (arg_with_type.type == "s64") {
+                        arg_with_type.ffi_arg_type = ffi_type_sint64;
+                    } else if (arg_with_type.type == "u8") {
+                        arg_with_type.ffi_arg_type = ffi_type_uint8;
+                    } else if (arg_with_type.type == "u16") {
+                        arg_with_type.ffi_arg_type = ffi_type_uint16;
+                    } else if (arg_with_type.type == "u32") {
+                        arg_with_type.ffi_arg_type = ffi_type_uint32;
+                    } else if (arg_with_type.type == "u64") {
+                        arg_with_type.ffi_arg_type = ffi_type_uint64;
+                    } else if (arg_with_type.type == "f32") {
+                        arg_with_type.ffi_arg_type = ffi_type_float;
+                    } else if (arg_with_type.type == "f64") {
+                        arg_with_type.ffi_arg_type = ffi_type_double;
+                    } else if (arg_with_type.type == "va_args") {
+                        arg_with_type.ffi_arg_type = ffi_type_pointer;
+                    }
+
+                    if (arg_with_type.size > 1) {
+                        ffi_type ffi_type_array;
+                        ffi_type_array.size = arg_with_type.ffi_arg_type.size * arg_with_type.size;
+                        ffi_type_array.alignment = arg_with_type.ffi_arg_type.alignment;
+                        ffi_type_array.type = FFI_TYPE_STRUCT;
+                        ffi_type_array.elements = (struct _ffi_type **)&null_ptr_g;
+
+                        arg_with_type.ffi_arg_type = ffi_type_array;
+                    }
+
+                    arg_types_term = tail;
+                } else if (enif_is_tuple(env, type_term)) {
+                    auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term, wrappers);
+                    args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+                    arg_types_term = tail;
+                    wrappers.push_back(struct_type);
+                } else {
+                    auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info, wrappers);
+                    if (struct_type) {
+                        args_with_type.emplace_back(arg_value, arg_type_info, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+                        wrappers.push_back(struct_type);
+                        arg_types_term = tail;
+                    } else {
+                        return 0;
+                    }
+                }
+            } else {
+                return 0;
             }
-            args_with_type.emplace_back(arg_value, type_term, arg_type_str, size, arg_type_info);
-            auto &arg_with_type = args_with_type[args_with_type.size() - 1];
-            if (arg_with_type.type == "c_ptr") {
-                arg_with_type.ffi_arg_type = ffi_type_pointer;
-            } else if (arg_with_type.type == "s8") {
-                arg_with_type.ffi_arg_type = ffi_type_sint8;
-            } else if (arg_with_type.type == "s16") {
-                arg_with_type.ffi_arg_type = ffi_type_sint16;
-            } else if (arg_with_type.type == "s32") {
-                arg_with_type.ffi_arg_type = ffi_type_sint32;
-            } else if (arg_with_type.type == "s64") {
-                arg_with_type.ffi_arg_type = ffi_type_sint64;
-            } else if (arg_with_type.type == "u8") {
-                arg_with_type.ffi_arg_type = ffi_type_uint8;
-            } else if (arg_with_type.type == "u16") {
-                arg_with_type.ffi_arg_type = ffi_type_uint16;
-            } else if (arg_with_type.type == "u32") {
-                arg_with_type.ffi_arg_type = ffi_type_uint32;
-            } else if (arg_with_type.type == "u64") {
-                arg_with_type.ffi_arg_type = ffi_type_uint64;
-            } else if (arg_with_type.type == "f32") {
-                arg_with_type.ffi_arg_type = ffi_type_float;
-            } else if (arg_with_type.type == "f64") {
-                arg_with_type.ffi_arg_type = ffi_type_double;
-            } else if (arg_with_type.type == "va_args") {
-                arg_with_type.ffi_arg_type = ffi_type_pointer;
-            }
-
-            if (arg_with_type.size > 1) {
-                ffi_type ffi_type_array;
-                ffi_type_array.size = arg_with_type.ffi_arg_type.size * arg_with_type.size;
-                ffi_type_array.alignment = arg_with_type.ffi_arg_type.alignment;
-                ffi_type_array.type = FFI_TYPE_STRUCT;
-                ffi_type_array.elements = (struct _ffi_type **)&null_ptr_g;
-
-                arg_with_type.ffi_arg_type = ffi_type_array;
-            }
-
-            arg_types_term = tail;
-        } else if (enif_is_tuple(env, type_term)) {
-            auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term, wrappers);
-            args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
-            arg_types_term = tail;
-            wrappers.push_back(struct_type);
-        } else if (auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info, wrappers)) {
-            args_with_type.emplace_back(arg_value, arg_type_info, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
-            wrappers.push_back(struct_type);
-            arg_types_term = tail;
         } else {
             return 0;
         }
-      } else {
-        return 0;
-      }
-    } else {
-      return 0;
     }
-  }
-  return args_with_type.size() == length;
+    return args_with_type.size() == length;
 }
 
-FFIStructTypeWrapper *
+std::shared_ptr<FFIStructTypeWrapper>
 FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
                                         ERL_NIF_TERM struct_return_type_term,
-                                        std::vector<FFIStructTypeWrapper *> &wrappers) {
+                                        std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers) {
     int arity = -1;
     const ERL_NIF_TERM *array;
     std::vector<arg_type> args_with_type;
@@ -405,7 +409,7 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
     }
 
     if (get_args_with_type(env, array[2], args_with_type, wrappers)) {
-        auto wrapper = new FFIStructTypeWrapper(args_with_type.size() + 1);
+        auto wrapper = std::make_shared<FFIStructTypeWrapper>(args_with_type.size() + 1);
 
         wrapper->struct_id = struct_id;
         wrapper->resource_type = get_ffi_struct_resource_type(env, struct_id);
@@ -419,7 +423,7 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
             wrapper->field_types[args_with_type.size()] = nullptr;
             return wrapper;
         } else {
-            delete wrapper;
+            wrapper.reset();
             return nullptr;
         }
     }
@@ -676,11 +680,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         return enif_make_badarg(env);
     }
 
-    std::vector<FFIStructTypeWrapper *> wrappers;
+    std::vector<std::shared_ptr<FFIStructTypeWrapper>> wrappers;
     OtterSymbol *symbol_res = nullptr;
 
     std::string return_type;
-    FFIStructTypeWrapper *struct_return_type = nullptr;
+    std::shared_ptr<FFIStructTypeWrapper> struct_return_type = nullptr;
 
     std::vector<arg_type> args_with_type;
     if (erlang::nif::get_atom(env, argv[1], return_type) && !return_type.empty()) {
@@ -717,7 +721,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
               free((void *)args);
               for (size_t i = 0; i < wrappers.size(); ++i) {
                   auto wrapper_it = wrappers[i];
-                  delete wrapper_it;
+                  wrapper_it.reset();
               }
               wrappers.clear();
               return erlang::nif::error(env, "fail to allocate memory for ffi values");
@@ -986,8 +990,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         free_ffi_res<double>(ffi_res, &ffi_type_double);
         for (size_t i = 0; i < wrappers.size(); ++i) {
             auto wrapper_it = wrappers[i];
-            if (wrapper_it != struct_return_type) {
-                delete wrapper_it;
+            if (wrapper_it.get() != struct_return_type.get()) {
+                wrapper_it.reset();
             }
         }
         if (args) free((void *)args);
@@ -1004,7 +1008,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                         free(rc);
                         rc = nullptr;
                     }
-                    delete struct_return_type;
+                    struct_return_type.reset();
                     return erlang::nif::error(env, "cannot make_ffi_struct_resource");
                 }
             } else if (return_type == "void") {
