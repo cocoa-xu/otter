@@ -213,11 +213,16 @@ get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
 static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
                                              size_t return_object_size,
                                              ErlNifResourceType *resource_type,
-                                             void *result) {
+                                             void *result, ERL_NIF_TERM &ret) {
   auto resource = enif_alloc_resource(resource_type, return_object_size);
-  memcpy(resource, (void *)result, return_object_size);
-  ERL_NIF_TERM res = enif_make_resource(env, resource);
-  return res;
+  if (resource) {
+      memcpy(resource, (void *)result, return_object_size);
+      ret = enif_make_resource(env, resource);
+      enif_release_resource(resource);
+      return true;
+  } else {
+      return false;
+  }
 }
 
 class FFIStructTypeWrapper {
@@ -886,8 +891,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (struct_return_type) {
-        ret = make_ffi_struct_resource(env, return_object_size,
-                                       struct_return_type->resource_type, rc);
+        if (!make_ffi_struct_resource(env, return_object_size,
+                                     struct_return_type->resource_type, rc, ret)) {
+            free((void *)args);
+            free(rc);
+            return erlang::nif::error(env, "cannot make_ffi_struct_resource");
+        }
       } else if (return_type == "void") {
         ret = erlang::nif::ok(env);
       } else if (return_type == "u8") {
