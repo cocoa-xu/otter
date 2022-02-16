@@ -913,38 +913,45 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         }
       }
 
-      ERL_NIF_TERM ret;
-      if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
-        // size here gets updated by ffi_prep_cif
-        return_object_size = ffi_return_type->size;
-        if (return_object_size > 0) {
-            rc = malloc(return_object_size);
-            if (rc == nullptr) {
-                ready = 0;
-                error_msg = "cannot allocate memory for ffi return value";
-            }
-        }
-
-        if (ready) {
-            ffi_call(&cif, (void (*)())symbol, rc, values);
-        }
-
-        free_ffi_res<void *>(ffi_res, &ffi_type_pointer);
-        free_ffi_res<uint8_t>(ffi_res, &ffi_type_uint8);
-        free_ffi_res<uint16_t>(ffi_res, &ffi_type_uint16);
-        free_ffi_res<uint32_t>(ffi_res, &ffi_type_uint32);
-        free_ffi_res<uint64_t>(ffi_res, &ffi_type_uint64);
-        free_ffi_res<int8_t>(ffi_res, &ffi_type_sint8);
-        free_ffi_res<int16_t>(ffi_res, &ffi_type_sint16);
-        free_ffi_res<int32_t>(ffi_res, &ffi_type_sint32);
-        free_ffi_res<int64_t>(ffi_res, &ffi_type_sint64);
-        free_ffi_res<float>(ffi_res, &ffi_type_float);
-        free_ffi_res<double>(ffi_res, &ffi_type_double);
-      } else {
-          if (!error_msg.empty()) {
-              error_msg = "ffi_prep_cif failed";
+      for (size_t i = 0; i < args_with_type.size(); i++) {
+          if (values[i] == nullptr) {
+              ready = 0;
+              error_msg = "input argument missing for arg at index " + std::to_string(i);
           }
       }
+
+        ERL_NIF_TERM ret;
+        if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
+            // size here gets updated by ffi_prep_cif
+            return_object_size = ffi_return_type->size;
+            if (return_object_size > 0) {
+                rc = malloc(return_object_size);
+                if (rc == nullptr) {
+                    ready = 0;
+                    error_msg = "cannot allocate memory for ffi return value";
+                }
+            }
+
+            if (ready) {
+                ffi_call(&cif, (void (*)())symbol, rc, values);
+            }
+
+            free_ffi_res<void *>(ffi_res, &ffi_type_pointer);
+            free_ffi_res<uint8_t>(ffi_res, &ffi_type_uint8);
+            free_ffi_res<uint16_t>(ffi_res, &ffi_type_uint16);
+            free_ffi_res<uint32_t>(ffi_res, &ffi_type_uint32);
+            free_ffi_res<uint64_t>(ffi_res, &ffi_type_uint64);
+            free_ffi_res<int8_t>(ffi_res, &ffi_type_sint8);
+            free_ffi_res<int16_t>(ffi_res, &ffi_type_sint16);
+            free_ffi_res<int32_t>(ffi_res, &ffi_type_sint32);
+            free_ffi_res<int64_t>(ffi_res, &ffi_type_sint64);
+            free_ffi_res<float>(ffi_res, &ffi_type_float);
+            free_ffi_res<double>(ffi_res, &ffi_type_double);
+        } else {
+            if (!error_msg.empty()) {
+                error_msg = "ffi_prep_cif failed";
+            }
+        }
 
         if (!error_msg.empty()) {
             if (args) free((void *)args);
