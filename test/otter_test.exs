@@ -16,7 +16,7 @@ defmodule OtterTest do
   # #pragma pack(pop)
   cstruct(s_u8_u16(u8 :: u8, u16 :: u16))
   extern create_s_u8_u16(s_u8_u16())
-  extern receive_s_u8_u16(:u32, t :: s_u8_u16())
+  extern receive_s_u8_u16(:u32, s_u8_u16())
 
   # #pragma pack(push, 4)
   # struct alignas(8) complex {
@@ -37,14 +37,14 @@ defmodule OtterTest do
     bar :: u32 # todo: embed another struct inside, bar :: s_u8_u16()
     ))
   extern create_complex(complex())
-  extern receive_complex(:u32, t :: complex())
+  extern receive_complex(:u32, complex())
 
   # struct matrix16x16 {
   #     uint32_t m[16][16];
   # };
   cstruct(matrix16x16(m :: u32-size(16, 16)))
   extern create_matrix16x16(matrix16x16())
-  extern receive_matrix16x16(:u32, t :: matrix16x16())
+  extern receive_matrix16x16(:u32, matrix16x16())
 
   # test basic data types
   extern pass_through_u8(:u8, val :: u8)

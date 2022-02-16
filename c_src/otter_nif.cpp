@@ -254,12 +254,14 @@ private:
 
 class arg_type {
 public:
-    arg_type(ERL_NIF_TERM term_, const std::string type_, uint64_t size_, ERL_NIF_TERM info) :
-        term(term_), type(type_), size(size_), extra_info(info) {
+    arg_type(ERL_NIF_TERM term_, ERL_NIF_TERM type_term_, const std::string type_, uint64_t size_, ERL_NIF_TERM info) :
+        term(term_), type_term(type_term_), type(type_), size(size_), extra_info(info) {
     }
 
     ERL_NIF_TERM term;
+    ERL_NIF_TERM type_term;
     std::string type;
+
     // size > 0: nd array
     uint64_t size;
     // erlang map
@@ -300,9 +302,9 @@ static bool get_args_with_type(
         // %{type: type_term}
         // %{type: type_term, size: size_term}
         ERL_NIF_TERM type_term;
-        if (enif_get_map_value(env, array[1], enif_make_atom(env, "type"), &type_term) &&
-                (erlang::nif::get_atom(env, type_term, arg_type_str) ||
-                 erlang::nif::get(env, type_term, arg_type_str)))
+        enif_get_map_value(env, array[1], enif_make_atom(env, "type"), &type_term);
+        if (erlang::nif::get_atom(env, type_term, arg_type_str) ||
+                 erlang::nif::get(env, type_term, arg_type_str))
         {
             // ignore error as `size` will stay 0 if key `size` is not in the map
             uint64_t size = 0;
@@ -310,7 +312,7 @@ static bool get_args_with_type(
             if (enif_get_map_value(env, array[1], enif_make_atom(env, "size"), &size_term)) {
                 erlang::nif::get_uint64(env, size_term, &size);
             }
-            args_with_type.emplace_back(array[0], arg_type_str, size, array[1]);
+            args_with_type.emplace_back(array[0], type_term, arg_type_str, size, array[1]);
             auto &arg_with_type = args_with_type[args_with_type.size() - 1];
             ffi_type type;
             if (arg_with_type.type == "c_ptr") {
@@ -350,9 +352,12 @@ static bool get_args_with_type(
             }
 
             arg_types_term = tail;
-        } else if (auto struct_type =
-                       FFIStructTypeWrapper::create_from_tuple(env, array[1])) {
-          args_with_type.emplace_back(array[0], struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+        } else if (enif_is_tuple(env, type_term)) {
+            auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term);
+            args_with_type.emplace_back(array[0], type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+            arg_types_term = tail;
+        } else if (auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, array[1])) {
+          args_with_type.emplace_back(array[0], array[1], struct_type->struct_id, 0, enif_make_atom(env, "nil"));
           arg_types_term = tail;
         } else {
           return 0;
@@ -367,9 +372,6 @@ static bool get_args_with_type(
   return 1;
 }
 
-static thread_local std::map<std::string, FFIStructTypeWrapper>
-    struct_type_wrapper_registry{};
-
 FFIStructTypeWrapper *
 FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
                                         ERL_NIF_TERM struct_return_type_term) {
@@ -383,29 +385,25 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
   std::string struct_id;
   erlang::nif::get_atom(env, array[0], struct_atom);
   erlang::nif::get_atom(env, array[1], struct_id);
-  if (!is_size_correct_tuple)
-    return nullptr;
-  if (!(struct_atom == "struct"))
-    return nullptr;
-  auto wrapper_it = struct_type_wrapper_registry.find(struct_id);
-  if (wrapper_it != struct_type_wrapper_registry.end()) {
-    return &wrapper_it->second;
-  }
-  if (get_args_with_type(env, array[2], args_with_type)) {
-    auto insert_it = struct_type_wrapper_registry.emplace(
-        struct_id, FFIStructTypeWrapper(args_with_type.size() + 1));
-    if (!insert_it.second)
+  if (!is_size_correct_tuple) {
       return nullptr;
-    auto &wrapper = insert_it.first->second;
+  }
 
-    wrapper.struct_id = struct_id;
-    wrapper.resource_type = get_ffi_struct_resource_type(env, struct_id);
+  if (!(struct_atom == "struct")) {
+      return nullptr;
+  }
+
+  if (get_args_with_type(env, array[2], args_with_type)) {
+    auto wrapper = new FFIStructTypeWrapper(args_with_type.size() + 1);
+
+    wrapper->struct_id = struct_id;
+    wrapper->resource_type = get_ffi_struct_resource_type(env, struct_id);
     for (size_t i = 0; i < args_with_type.size(); ++i) {
       auto &p = args_with_type[i];
-      wrapper.field_types[i] = &p.ffi_arg_type;
+      wrapper->field_types[i] = &p.ffi_arg_type;
     }
-    wrapper.field_types[args_with_type.size()] = nullptr;
-    return &wrapper;
+    wrapper->field_types[args_with_type.size()] = nullptr;
+    return wrapper;
   }
   return nullptr;
 }
@@ -669,8 +667,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
   std::vector<arg_type> args_with_type;
   if (erlang::nif::get_atom(env, argv[1], return_type)) {
     // Do nothing
-  } else if (auto created =
-                 FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
+  } else if (auto created = FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
     struct_return_type = created;
     if (struct_return_type == nullptr) {
         return erlang::nif::error(env, "fail to create_from_tuple");
@@ -678,10 +675,13 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
   } else {
     return erlang::nif::error(env, "fail to get return_type");
   }
+
   if (enif_get_resource(env, argv[0], OtterSymbol::type,
                         (void **)&symbol_res)) {
-    if (!get_args_with_type(env, argv[2], args_with_type))
-      return erlang::nif::error(env, "fail to get args_with_type");
+    if (!get_args_with_type(env, argv[2], args_with_type)) {
+        return erlang::nif::error(env, "fail to get args_with_type");
+    }
+
     void *symbol = symbol_res->val;
     if (symbol != nullptr) {
       ffi_cif cif;
@@ -765,16 +765,16 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
           }
           type_index_resindex[args[i]][i] = value_slot;
         } else {
-          auto wrapper_it = struct_type_wrapper_registry.find(p.type);
-          if (wrapper_it != struct_type_wrapper_registry.end()) {
-            args[i] = &wrapper_it->second.ffi_struct_type;
+          auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term);
+          if (wrapper_it != nullptr) {
+            args[i] = &wrapper_it->ffi_struct_type;
             void *resource_obj_ptr = nullptr;
             const bool resource = enif_get_resource(
-              env, p.term, wrapper_it->second.resource_type,
+              env, p.term, wrapper_it->resource_type,
               &resource_obj_ptr);
             if (!resource) {
               ready = 0;
-              error_msg = "failed to get resource for struct: " + wrapper_it->second.struct_id;
+              error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
               break;
             }
 
@@ -904,6 +904,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
                                      struct_return_type->resource_type, rc, ret)) {
             free((void *)args);
             free(rc);
+            // delete struct_return_type;
             return erlang::nif::error(env, "cannot make_ffi_struct_resource");
         }
       } else if (return_type == "void") {
