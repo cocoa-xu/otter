@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cstring>
 
 #define GET(ARGN, VAR)                      \
   if (!erlang::nif::get(env, argv[ARGN], &VAR)) \

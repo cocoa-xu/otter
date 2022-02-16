@@ -85,7 +85,6 @@ static ERL_NIF_TERM otter_dlclose(ErlNifEnv *env, int argc,
     void *handle = res->val;
     if (handle != nullptr) {
       int ret = dlclose(handle);
-      auto entry = opened_handles.end();
       for (auto it = opened_handles.begin(); it != opened_handles.end(); ++it) {
         if (it->second->val == handle) {
           entry = it;
