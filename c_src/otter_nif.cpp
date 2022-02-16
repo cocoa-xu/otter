@@ -1024,7 +1024,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
                 if (rc) {
                     free(rc);
-                    re = nullptr;
+                    rc = nullptr;
                 }
                 error_msg = "return_type " + return_type + " is not implemented yet";
                 return erlang::nif::error(env, error_msg.c_str());
