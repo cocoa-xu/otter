@@ -30,8 +30,7 @@ using OtterSymbol = erlang_nif_res<void *>;
 static void destruct_otter_handle(ErlNifEnv *env, void *args) {}
 
 static std::map<std::string, OtterHandle *> opened_handles;
-static std::map<OtterHandle *, std::map<std::string, OtterSymbol *>>
-    found_symbols;
+static std::map<OtterHandle *, std::map<std::string, OtterSymbol *>> found_symbols;
 
 static ERL_NIF_TERM otter_dlopen(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 2) {
@@ -203,7 +202,7 @@ register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
 
 static std::map<std::string, ErlNifResourceType *>
     struct_resource_type_registry{};
-std::mutex struct_resource_type_registry_lock;
+static std::mutex struct_resource_type_registry_lock;
 
 static ErlNifResourceType *
 get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
