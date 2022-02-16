@@ -49,5 +49,5 @@ jobs:
           unset CFLAGS
           ulimit -S -c unlimited
           sudo sysctl -w kernel.core_pattern="dumped.core"
-          mix coveralls.github
+          mix test
           [ -e dumped.core ] && gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" ${ERL} dumped.core
