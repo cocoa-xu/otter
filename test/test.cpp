@@ -178,4 +178,25 @@ double pass_through_f64(double val) {
 uint64_t pass_through_c_ptr(void * ptr) {
     return (uint64_t)(uint64_t *)ptr;
 }
+
+uint64_t multiply(uint32_t a, uint32_t b) {
+    return a * b;
+}
+
+uint64_t divide(uint32_t a, uint32_t b) {
+    return a / b;
+}
+
+uint64_t add(uint32_t a, uint32_t b) {
+    return a + b;
+}
+
+uint64_t subtract(uint32_t a, uint32_t b) {
+    return a - b;
+}
+
+uint64_t pass_func_ptr(uint32_t a, uint32_t b, uint64_t(*op)(uint32_t, uint32_t)) {
+    return op(a, b);
+}
+
 }

@@ -76,6 +76,12 @@ defmodule OtterTest do
   extern pass_through_f64(:f64, val :: f64)
   extern pass_through_c_ptr(:u64, ptr :: c_ptr)
 
+  extern multiply(:u64, a :: u32, b :: u32)
+  extern divide(:u64, a :: u32, b :: u32)
+  extern add(:u64, a :: u32, b :: u32)
+  extern subtract(:u64, a :: u32, b :: u32)
+  extern pass_func_ptr(:u64, a :: u32, b :: u32, op :: c_ptr)
+
   test "add_two_32" do
     7 = add_two_32!(3, 4)
   end
@@ -119,11 +125,42 @@ defmodule OtterTest do
     {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
     {:ok, add_two_32} = Otter.dlsym(image, "add_two_32")
     {:ok, add_two_32_addr} = Otter.symbol_to_address(add_two_32)
-    {:ok, add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
-    Otter.dlclose(image)
+    {:ok, _add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
+#    Otter.dlclose(image)
   end
 
   test "dlopen self" do
     {:ok, _image} = Otter.dlopen(nil, :RTLD_NOW)
+  end
+
+  test "pass function pointer by symbol/address" do
+    {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
+    multiply =
+      image
+      |> Otter.dlsym!("multiply")
+
+    divide =
+      image
+      |> Otter.dlsym!("divide")
+
+    add =
+      image
+      |> Otter.dlsym!("add")
+
+    subtract =
+      image
+      |> Otter.dlsym!("subtract")
+
+    # pass function pointer by symbol
+    1008 = pass_func_ptr!(42, 24, multiply)
+    1 = pass_func_ptr!(42, 24, divide)
+    66 = pass_func_ptr!(42, 24, add)
+    18 = pass_func_ptr!(42, 24, subtract)
+
+    # pass function pointer by address
+    1008 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(multiply))
+    1 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(divide))
+    66 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(add))
+    18 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(subtract))
   end
 end
