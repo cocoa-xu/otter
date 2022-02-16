@@ -183,7 +183,6 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 };
 
 void resource_dtor(ErlNifEnv *, void *obj) {
-    enif_release_resource(obj);
 }
 
 // NOTE: the basic idea here we register a resource type for each struct type,
@@ -191,7 +190,7 @@ void resource_dtor(ErlNifEnv *, void *obj) {
 static ErlNifResourceType *
 register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
   auto resource_type = enif_open_resource_type(
-      env, "Otter", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+      env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
       ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER), nullptr);
   return resource_type;
 }
@@ -212,11 +211,11 @@ get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
 }
 
 static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
-                                             ffi_type &struct_type,
+                                             size_t return_object_size,
                                              ErlNifResourceType *resource_type,
                                              void *result) {
-  auto resource = enif_alloc_resource(resource_type, struct_type.size);
-  memcpy(resource, (void *)result, struct_type.size);
+  auto resource = enif_alloc_resource(resource_type, return_object_size);
+  memcpy(resource, (void *)result, return_object_size);
   ERL_NIF_TERM res = enif_make_resource(env, resource);
   return res;
 }
@@ -887,7 +886,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (struct_return_type) {
-        ret = make_ffi_struct_resource(env, struct_return_type->ffi_struct_type,
+        ret = make_ffi_struct_resource(env, return_object_size,
                                        struct_return_type->resource_type, rc);
       } else if (return_type == "void") {
         ret = erlang::nif::ok(env);
