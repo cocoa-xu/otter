@@ -20,6 +20,9 @@ defmodule Otter.MixProject do
         "coveralls.post": :test,
         "coveralls.html": :test
       ],
+      make_env: %{
+        "CFLAGS" => System.get_env("CFLAGS", "-O2")
+      }
     ]
   end
 
