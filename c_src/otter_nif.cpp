@@ -217,15 +217,19 @@ static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
                                              size_t return_object_size,
                                              ErlNifResourceType *resource_type,
                                              void *result, ERL_NIF_TERM &ret) {
-  auto resource = enif_alloc_resource(resource_type, return_object_size);
-  if (resource) {
-      memcpy(resource, (void *)result, return_object_size);
-      ret = enif_make_resource(env, resource);
-      enif_release_resource(resource);
-      return true;
-  } else {
-      return false;
-  }
+    if (resource_type) {
+        auto resource = enif_alloc_resource(resource_type, return_object_size);
+        if (resource) {
+            memcpy(resource, (void *)result, return_object_size);
+            ret = enif_make_resource(env, resource);
+            enif_release_resource(resource);
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
 }
 
 class FFIStructTypeWrapper {
@@ -375,37 +379,42 @@ static bool get_args_with_type(
 FFIStructTypeWrapper *
 FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
                                         ERL_NIF_TERM struct_return_type_term) {
-  int arity = -1;
-  const ERL_NIF_TERM *array;
-  std::vector<arg_type> args_with_type;
-  bool is_size_correct_tuple =
-      enif_get_tuple(env, struct_return_type_term, &arity, &array) &&
-      arity == 3;
-  std::string struct_atom;
-  std::string struct_id;
-  erlang::nif::get_atom(env, array[0], struct_atom);
-  erlang::nif::get_atom(env, array[1], struct_id);
-  if (!is_size_correct_tuple) {
-      return nullptr;
-  }
-
-  if (!(struct_atom == "struct")) {
-      return nullptr;
-  }
-
-  if (get_args_with_type(env, array[2], args_with_type)) {
-    auto wrapper = new FFIStructTypeWrapper(args_with_type.size() + 1);
-
-    wrapper->struct_id = struct_id;
-    wrapper->resource_type = get_ffi_struct_resource_type(env, struct_id);
-    for (size_t i = 0; i < args_with_type.size(); ++i) {
-      auto &p = args_with_type[i];
-      wrapper->field_types[i] = &p.ffi_arg_type;
+    int arity = -1;
+    const ERL_NIF_TERM *array;
+    std::vector<arg_type> args_with_type;
+    bool is_size_correct_tuple =
+            enif_get_tuple(env, struct_return_type_term, &arity, &array) &&
+            arity == 3;
+    std::string struct_atom;
+    std::string struct_id;
+    erlang::nif::get_atom(env, array[0], struct_atom);
+    erlang::nif::get_atom(env, array[1], struct_id);
+    if (!is_size_correct_tuple) {
+        return nullptr;
     }
-    wrapper->field_types[args_with_type.size()] = nullptr;
-    return wrapper;
-  }
-  return nullptr;
+
+    if (struct_atom != "struct") {
+        return nullptr;
+    }
+
+    if (get_args_with_type(env, array[2], args_with_type)) {
+        auto wrapper = new FFIStructTypeWrapper(args_with_type.size() + 1);
+
+        wrapper->struct_id = struct_id;
+        wrapper->resource_type = get_ffi_struct_resource_type(env, struct_id);
+        if (wrapper->resource_type) {
+            for (size_t i = 0; i < args_with_type.size(); ++i) {
+                auto &p = args_with_type[i];
+                wrapper->field_types[i] = &p.ffi_arg_type;
+            }
+            wrapper->field_types[args_with_type.size()] = nullptr;
+            return wrapper;
+        } else {
+            delete wrapper;
+            return nullptr;
+        }
+    }
+    return nullptr;
 }
 
 static ERL_NIF_TERM otter_symbol_to_address(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
