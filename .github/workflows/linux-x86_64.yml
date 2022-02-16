@@ -47,4 +47,8 @@ jobs:
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
-          mix test
+          ulimit -S -c unlimited
+          sudo sysctl -w kernel.core_pattern="dumped.core"
+          mix test || true
+          ls ./
+          gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" ${ERL} dumped.core

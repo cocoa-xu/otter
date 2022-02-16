@@ -982,6 +982,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         if (values) free((void *)values);
 
         if (!error_msg.empty()) {
+            struct_return_type.reset();
             return erlang::nif::error(env, error_msg.c_str());
         }
 
