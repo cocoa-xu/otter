@@ -70,6 +70,24 @@ defmodule OtterTest do
     7 = add_two_32!(3, 4)
     IO.inspect("add_two_32 end")
 
+    IO.inspect("s_u8_u16 start")
+    t = create_s_u8_u16!()
+    IO.inspect("s_u8_u16 t")
+    assert 1 == receive_s_u8_u16!(t)
+    IO.inspect("s_u8_u16 end")
+
+    IO.inspect("complex start")
+    t = create_complex!()
+    IO.inspect("complex t")
+    assert 1 == receive_complex!(t)
+    IO.inspect("complex end")
+
+    IO.inspect("create_matrix16x16 start")
+    t = create_matrix16x16!()
+    IO.inspect("create_matrix16x16 t")
+    assert 32640 == receive_matrix16x16!(t)
+    IO.inspect("create_matrix16x16 end")
+
     IO.inspect("bdt start")
     42 = pass_through_u8!(42)
     IO.inspect("bdt 1")

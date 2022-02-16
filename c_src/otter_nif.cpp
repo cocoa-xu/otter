@@ -182,7 +182,7 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
     {"f32", &ffi_type_float},  {"f64", &ffi_type_double},
 };
 
-void resource_dtor(ErlNifEnv *, void *obj) { free(obj); }
+void resource_dtor(ErlNifEnv *, void *obj) { }
 
 // NOTE: the basic idea here we register a resource type for each struct type,
 // identified by struct_id.
