@@ -6,11 +6,10 @@ LIB_SRC = $(shell pwd)/lib
 TEST_SRC = $(shell pwd)/test
 TEST_SO = $(TEST_SRC)/test.so
 
-LIBFFI_CFLAGS = "$(shell pkg-config --cflags libffi)"
-LIBFFI_LIBS = "$(shell pkg-config --libs libffi)"
+LIBFFI_CFLAGS = -I"$(shell pkg-config --variable=includedir libffi)"
+LIBFFI_LIBS = $(shell pkg-config --libs libffi)
 CPPFLAGS += $(CFLAGS) -std=c++14 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fPIC
-LDFLAGS ?= ""
-LDFLAGS += "-shared"
+LDFLAGS += -shared
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
