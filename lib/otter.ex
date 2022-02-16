@@ -41,6 +41,8 @@ defmodule Otter do
     Otter.Nif.dlopen(path, mode)
   end
 
+  deferror dlopen(path, mode)
+
   @doc """
   Call dlclose to release a opened handle
 
@@ -53,6 +55,8 @@ defmodule Otter do
     Otter.Nif.dlclose(handle)
   end
 
+  deferror dlclose(handle)
+
   @doc """
   Find a symbol in an image
 
@@ -63,12 +67,16 @@ defmodule Otter do
     Otter.Nif.dlsym(image, func_name)
   end
 
+  deferror dlsym(image, func_name)
+
   @doc """
   Get the raw address of a symbol.
   """
   def symbol_to_address(symbol) do
     Otter.Nif.symbol_to_address(symbol)
   end
+
+  deferror symbol_to_address(symbol)
 
   @doc """
   Convert the raw address to a symbol. Use with cautions.
@@ -77,12 +85,16 @@ defmodule Otter do
     Otter.Nif.address_to_symbol(address)
   end
 
+  deferror address_to_symbol(address)
+
   @doc """
   Get current erlang NIF environment
   """
   def erl_nif_env() do
     Otter.Nif.erl_nif_env()
   end
+
+  deferror erl_nif_env()
 
   @doc """
   Invoke a symbol(function) with input arguments
@@ -107,6 +119,8 @@ defmodule Otter do
   def invoke(symbol, return_type, args_with_type) do
     Otter.Nif.invoke(symbol, return_type, args_with_type)
   end
+
+  deferror invoke(symbol, return_type, args_with_type)
 
   defp get_unique_arg_name(arg_name, index) do
     arg_name
