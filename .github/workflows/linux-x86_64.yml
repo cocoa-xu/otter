@@ -34,7 +34,7 @@ jobs:
         run: |
           sudo apt update && sudo apt install libffi-dev pkg-config
           mix deps.get
-          export CFLAGS="-fsanitize=address -g"
+          export CFLAGS="-fsanitize=address -g -DDEBUG_NIF=1"
           export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
           export CMD_ARGS="${CMD:3}"
           export ERL="$(which erl)"
@@ -46,3 +46,4 @@ jobs:
           export EMU=beam
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
+          mix test

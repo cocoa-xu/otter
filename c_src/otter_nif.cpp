@@ -840,29 +840,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         }
       }
 
-      // todo: fill nd array values
-      // int sum_2d_matrix(uint32_t m[16][16])
-      //
-      // uint32_t m[16][16] is different from
-      //   struct matrix { uint32_t m[16][16]; };
-      //   int sum_2d_matrix(struct matrix m)
-      /*
-      for (auto& nd_array_type : nd_array_type_map) {
-          auto arg_index = nd_array_type.first;
-          auto &ffi_type_array = nd_array_type.second;
-          auto &p = args_with_type[arg_index];
-
-          if (args[arg_index] == &ffi_type_uint8) {
-              using value_type = unsigned int;
-              std::vector<value_type> vals;
-              if (erlang::nif::get_list_uint(env, p.term, vals)) {
-                  args[arg_index] = &ffi_type_array;
-                  get_ffi_res<uint8_t>(ffi_res, args[arg_index], true);
-              }
-          }
-      }
-      */
-
         // fill values
         for (size_t i = 0; ready && i < args_with_type.size(); i++) {
             if (type_index_resindex.find(args[i]) != type_index_resindex.end()) {
@@ -961,11 +938,13 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             return_object_size = ffi_return_type->size;
             if (return_object_size > 0) {
                 rc = malloc(return_object_size);
+#ifdef DEBUG_NIF
                 if (struct_return_type) {
                     printf("[NIF] return_object_size: struct %s: %zu\r\n", struct_return_type->struct_id.c_str(), return_object_size);
                 } else {
                     printf("[NIF] return_object_size: %s: %zu\r\n", return_type.c_str(), return_object_size);
                 }
+#endif
                 if (rc == nullptr) {
                     ready = 0;
                     error_msg = "cannot allocate memory for ffi return value";
