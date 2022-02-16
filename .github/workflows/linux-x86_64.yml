@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       MIX_ENV: test
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v2
@@ -46,3 +47,4 @@ jobs:
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
           mix test --max-cases 1
+          mix coveralls.github
