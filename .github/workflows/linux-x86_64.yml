@@ -27,7 +27,7 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: 24.2
-          elixir-version: 1.13.2
+          elixir-version: 1.13.3
 
       - name: Compile and Test
         run: |
