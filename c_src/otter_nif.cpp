@@ -183,7 +183,6 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 };
 
 void resource_dtor(ErlNifEnv *, void *obj) {
-    enif_release_resource(obj);
 }
 
 // NOTE: the basic idea here we register a resource type for each struct type,
@@ -191,7 +190,7 @@ void resource_dtor(ErlNifEnv *, void *obj) {
 static ErlNifResourceType *
 register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
   auto resource_type = enif_open_resource_type(
-      env, "Otter", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+      env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
       ErlNifResourceFlags(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER), nullptr);
   return resource_type;
 }
@@ -212,13 +211,18 @@ get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
 }
 
 static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
-                                             ffi_type &struct_type,
+                                             size_t return_object_size,
                                              ErlNifResourceType *resource_type,
-                                             void *result) {
-  auto resource = enif_alloc_resource(resource_type, struct_type.size);
-  memcpy(resource, (void *)result, struct_type.size);
-  ERL_NIF_TERM res = enif_make_resource(env, resource);
-  return res;
+                                             void *result, ERL_NIF_TERM &ret) {
+  auto resource = enif_alloc_resource(resource_type, return_object_size);
+  if (resource) {
+      memcpy(resource, (void *)result, return_object_size);
+      ret = enif_make_resource(env, resource);
+      enif_release_resource(resource);
+      return true;
+  } else {
+      return false;
+  }
 }
 
 class FFIStructTypeWrapper {
@@ -271,12 +275,15 @@ static void * null_ptr_g = nullptr;
 static bool get_args_with_type(
     ErlNifEnv *env, ERL_NIF_TERM arg_types_term,
     std::vector<arg_type> &args_with_type) {
-  if (!enif_is_list(env, arg_types_term))
-    return 0;
+  if (!enif_is_list(env, arg_types_term)) {
+      return 0;
+  }
 
   unsigned int length;
-  if (!enif_get_list_length(env, arg_types_term, &length))
-    return 0;
+  if (!enif_get_list_length(env, arg_types_term, &length)) {
+      return 0;
+  }
+
   args_with_type.reserve(length);
   ERL_NIF_TERM head, tail;
 
@@ -662,6 +669,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
   } else if (auto created =
                  FFIStructTypeWrapper::create_from_tuple(env, argv[1])) {
     struct_return_type = created;
+    if (struct_return_type == nullptr) {
+        return erlang::nif::error(env, "fail to create_from_tuple");
+    }
   } else {
     return erlang::nif::error(env, "fail to get return_type");
   }
@@ -887,8 +897,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       if (struct_return_type) {
-        ret = make_ffi_struct_resource(env, struct_return_type->ffi_struct_type,
-                                       struct_return_type->resource_type, rc);
+        if (!make_ffi_struct_resource(env, return_object_size,
+                                     struct_return_type->resource_type, rc, ret)) {
+            free((void *)args);
+            free(rc);
+            return erlang::nif::error(env, "cannot make_ffi_struct_resource");
+        }
       } else if (return_type == "void") {
         ret = erlang::nif::ok(env);
       } else if (return_type == "u8") {
