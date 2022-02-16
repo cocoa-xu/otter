@@ -66,79 +66,114 @@ defmodule OtterTest do
   extern pass_func_ptr(:u64, a :: u32, b :: u32, op :: c_ptr)
 
   test "add_two_32" do
+    IO.inspect("add_two_32 start")
     7 = add_two_32!(3, 4)
+    IO.inspect("add_two_32 end")
   end
 
   test "s_u8_u16" do
+    IO.inspect("s_u8_u16 start")
     t = create_s_u8_u16!()
+    IO.inspect("s_u8_u16 t")
     assert 1 == receive_s_u8_u16!(t)
+    IO.inspect("s_u8_u16 end")
   end
 
   test "complex" do
+    IO.inspect("complex start")
     t = create_complex!()
+    IO.inspect("complex t")
     assert 1 == receive_complex!(t)
+    IO.inspect("complex end")
   end
 
   test "nd-array" do
+    IO.inspect("create_matrix16x16 start")
     t = create_matrix16x16!()
+    IO.inspect("create_matrix16x16 t")
     assert 32640 == receive_matrix16x16!(t)
+    IO.inspect("create_matrix16x16 end")
   end
 
   test "basic data types" do
+    IO.inspect("bdt start")
     42 = pass_through_u8!(42)
+    IO.inspect("bdt 1")
     65535 = pass_through_u16!(65535)
+    IO.inspect("bdt 2")
     0xdeadbeef = pass_through_u32!(0xdeadbeef)
+    IO.inspect("bdt 3")
     0xfeedfacedeadbeef = pass_through_u64!(0xfeedfacedeadbeef)
+    IO.inspect("bdt 4")
     -42 = pass_through_s8!(-42)
+    IO.inspect("bdt 5")
     -32000 = pass_through_s16!(-32000)
+    IO.inspect("bdt 6")
     -559038737 = pass_through_s32!(0xdeadbeef)
+    IO.inspect("bdt 7")
     -123456789 = pass_through_s64!(-123456789)
+    IO.inspect("bdt 8")
     assert 0.001 > abs(123.0125 - pass_through_f32!(123.0125))
+    IO.inspect("bdt 9")
     -123.456 = pass_through_f64!(-123.456)
+    IO.inspect("bdt 10")
     0 = pass_through_c_ptr!(0)
+    IO.inspect("bdt 11")
     0xdeadbeef = pass_through_c_ptr!(0xdeadbeef)
+    IO.inspect("bdt 12")
   end
 
   test "dlopen, dlclose, symbol_to_address and address_to_symbol" do
+    IO.inspect("openclose6")
     {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
+    IO.inspect("openclose5")
     {:ok, add_two_32} = Otter.dlsym(image, "add_two_32")
+    IO.inspect("openclose4")
     {:ok, add_two_32_addr} = Otter.symbol_to_address(add_two_32)
+    IO.inspect("openclose3")
     {:ok, _add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
+    IO.inspect("openclose1222")
     Otter.dlclose(image)
+    IO.inspect("openclose122324532")
   end
 
   test "dlopen self" do
+    IO.inspect("self start")
     {:ok, _image} = Otter.dlopen(nil, :RTLD_NOW)
+    IO.inspect("self end")
   end
 
   test "pass function pointer by symbol/address" do
+    IO.inspect("func ptr start")
     {:ok, image} = Otter.dlopen(@default_from, :RTLD_NOW)
     multiply =
       image
       |> Otter.dlsym!("multiply")
-
+    IO.inspect("func ptr mu")
     divide =
       image
       |> Otter.dlsym!("divide")
-
+    IO.inspect("func ptr d")
     add =
       image
       |> Otter.dlsym!("add")
-
+    IO.inspect("func ptr a")
     subtract =
       image
       |> Otter.dlsym!("subtract")
-
+    IO.inspect("func ptr s")
     # pass function pointer by symbol
     1008 = pass_func_ptr!(42, 24, multiply)
     1 = pass_func_ptr!(42, 24, divide)
     66 = pass_func_ptr!(42, 24, add)
     18 = pass_func_ptr!(42, 24, subtract)
+    IO.inspect("func ptr symb")
 
     # pass function pointer by address
     1008 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(multiply))
     1 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(divide))
     66 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(add))
     18 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(subtract))
+    IO.inspect("func ptr addrend")
   end
 end
