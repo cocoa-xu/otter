@@ -775,9 +775,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
           args[i] = &ffi_type_pointer;
           size_t value_slot;
           auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
-          if (!ffi_arg_res->set(nullptr, value_slot)) {
-            ready = 0;
-            break;
+          if (ffi_arg_res == nullptr || !ffi_arg_res->set(nullptr, value_slot)) {
+              ready = 0;
+              break;
           }
           type_index_resindex[args[i]][i] = value_slot;
         } else {
@@ -785,15 +785,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
           if (wrapper_it != nullptr) {
             args[i] = &wrapper_it->ffi_struct_type;
             void *resource_obj_ptr = nullptr;
-            const bool resource = enif_get_resource(
-              env, p.term, wrapper_it->resource_type,
-              &resource_obj_ptr);
-            if (!resource) {
-              ready = 0;
+            if (!(ready = enif_get_resource(env, p.term, wrapper_it->resource_type, &resource_obj_ptr))) {
               error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
               break;
             }
-
             values[i] = resource_obj_ptr;
           } else {
             // todo: other types
@@ -919,12 +914,20 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       }
 
       ERL_NIF_TERM ret;
-      if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(),
-                       ffi_return_type, args) == FFI_OK) {
+      if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
         // size here gets updated by ffi_prep_cif
         return_object_size = ffi_return_type->size;
-        rc = malloc(return_object_size);
-        ffi_call(&cif, (void (*)())symbol, rc, values);
+        if (return_object_size > 0) {
+            rc = malloc(return_object_size);
+            if (rc == nullptr) {
+                ready = 0;
+                error_msg = "cannot allocate memory for ffi return value";
+            }
+        }
+
+        if (ready) {
+            ffi_call(&cif, (void (*)())symbol, rc, values);
+        }
 
         free_ffi_res<void *>(ffi_res, &ffi_type_pointer);
         free_ffi_res<uint8_t>(ffi_res, &ffi_type_uint8);
@@ -938,57 +941,59 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
         free_ffi_res<float>(ffi_res, &ffi_type_float);
         free_ffi_res<double>(ffi_res, &ffi_type_double);
       } else {
+          if (!error_msg.empty()) {
+              error_msg = "ffi_prep_cif failed";
+          }
+      }
+
         if (!error_msg.empty()) {
-          error_msg = "ffi_prep_cif failed";
-        }
-      }
-
-      if (!error_msg.empty()) {
-          if (args) free((void *)args);
-          if (values) free((void *)values);
-          return erlang::nif::error(env, error_msg.c_str());
-      }
-
-      if (struct_return_type) {
-        if (!make_ffi_struct_resource(env, return_object_size, struct_return_type->resource_type, rc, ret)) {
             if (args) free((void *)args);
             if (values) free((void *)values);
-            if (rc) free(rc);
-            delete struct_return_type;
-            return erlang::nif::error(env, "cannot make_ffi_struct_resource");
+            return erlang::nif::error(env, error_msg.c_str());
         }
-      } else if (return_type == "void") {
-        ret = erlang::nif::ok(env);
-      } else if (return_type == "u8") {
-        ret = enif_make_uint(env, *(uint8_t *)rc);
-      } else if (return_type == "s8") {
-        ret = enif_make_int(env, *(int8_t *)rc);
-      } else if (return_type == "u16") {
-        ret = enif_make_uint(env, *(uint16_t *)rc);
-      } else if (return_type == "s16") {
-        ret = enif_make_int(env, *(int16_t *)rc);
-      } else if (return_type == "u32") {
-        ret = enif_make_uint(env, *(uint32_t *)rc);
-      } else if (return_type == "s32") {
-        ret = enif_make_int(env, *(int32_t *)rc);
-      } else if (return_type == "u64") {
-        ret = enif_make_uint64(env, *(uint64_t *)rc);
-      } else if (return_type == "s64") {
-        ret = enif_make_int64(env, *(int64_t *)rc);
-      } else if (return_type == "f32") {
-        ret = enif_make_double(env, *(float *)rc);
-      } else if (return_type == "f64") {
-        ret = enif_make_double(env, *(double *)rc);
-      } else if (return_type == "c_ptr") {
-        ret = enif_make_uint64(env, (uint64_t)(*(uint64_t *)rc));
-      } else {
-          printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
-          if (args) free((void *)args);
-          if (values) free((void *)values);
-          if (rc) free(rc);
-          error_msg = "return_type " + return_type + " is not implemented yet";
-          return erlang::nif::error(env, error_msg.c_str());
-      }
+
+        if (return_object_size > 0 && rc) {
+            if (struct_return_type) {
+                if (!make_ffi_struct_resource(env, return_object_size, struct_return_type->resource_type, rc, ret)) {
+                    if (args) free((void *)args);
+                    if (values) free((void *)values);
+                    if (rc) free(rc);
+                    delete struct_return_type;
+                    return erlang::nif::error(env, "cannot make_ffi_struct_resource");
+                }
+            } else if (return_type == "void") {
+                ret = erlang::nif::ok(env);
+            } else if (return_type == "u8") {
+                ret = enif_make_uint(env, *(uint8_t *)rc);
+            } else if (return_type == "s8") {
+                ret = enif_make_int(env, *(int8_t *)rc);
+            } else if (return_type == "u16") {
+                ret = enif_make_uint(env, *(uint16_t *)rc);
+            } else if (return_type == "s16") {
+                ret = enif_make_int(env, *(int16_t *)rc);
+            } else if (return_type == "u32") {
+                ret = enif_make_uint(env, *(uint32_t *)rc);
+            } else if (return_type == "s32") {
+                ret = enif_make_int(env, *(int32_t *)rc);
+            } else if (return_type == "u64") {
+                ret = enif_make_uint64(env, *(uint64_t *)rc);
+            } else if (return_type == "s64") {
+                ret = enif_make_int64(env, *(int64_t *)rc);
+            } else if (return_type == "f32") {
+                ret = enif_make_double(env, *(float *)rc);
+            } else if (return_type == "f64") {
+                ret = enif_make_double(env, *(double *)rc);
+            } else if (return_type == "c_ptr") {
+                ret = enif_make_uint64(env, (uint64_t)(*(uint64_t *)rc));
+            } else {
+                printf("[debug] todo: return_type: %s\r\n", return_type.c_str());
+                if (args) free((void *)args);
+                if (values) free((void *)values);
+                if (rc) free(rc);
+                error_msg = "return_type " + return_type + " is not implemented yet";
+                return erlang::nif::error(env, error_msg.c_str());
+            }
+        }
         if (args) free((void *)args);
         if (values) free((void *)values);
         if (rc) free(rc);
