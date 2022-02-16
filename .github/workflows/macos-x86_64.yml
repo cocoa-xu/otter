@@ -23,13 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: 24.2
-          elixir-version: 1.13.2
+      - name: Install Erlang and Elixir
+        run: |
+          brew install erlang
+          brew install elixir
+          brew install libffi
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Compile and Test
         run: |
-          brew install libffi
           mix deps.get
           mix test
