@@ -2,15 +2,12 @@
 
 using namespace std;
 
-#pragma pack(push, 4)
-struct alignas(4) s_u8_u16 {
+struct s_u8_u16 {
     uint8_t u8;
     uint16_t u16;
 };
-#pragma pack(pop)
 
-#pragma pack(push, 4)
-struct alignas(8) complex {
+struct complex {
     uint8_t c1;
     uint8_t c2;
     uint8_t c3[3];
@@ -20,7 +17,6 @@ struct alignas(8) complex {
     } foo;
     struct s_u8_u16 bar;
 };
-#pragma pack(pop)
 
 struct matrix16x16 {
     uint32_t m[16][16];
