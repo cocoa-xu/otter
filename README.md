@@ -7,6 +7,21 @@
 | Ubuntu 20.04     | x86_64  | [![CI](https://github.com/cocoa-xu/otter/actions/workflows/linux-x86_64.yml/badge.svg)](https://github.com/cocoa-xu/otter/actions/workflows/linux-x86_64.yml) |
 | macOS 11 Big Sur | x86_64  | [![CI](https://github.com/cocoa-xu/otter/actions/workflows/macos-x86_64.yml/badge.svg)](https://github.com/cocoa-xu/otter/actions/workflows/macos-x86_64.yml) |
 
+## Dependencies
+- pkg-config (for finding libffi)
+- libffi-dev
+
+For macOS, libffi can be installed by HomeBrew
+```shell
+brew install libffi
+```
+
+For debian/ubuntu, libffi can be installed using the following command
+```shell
+sudo apt update
+sudo apt install libffi-dev
+```
+
 ## Demo
 ```elixir
 defmodule Ctypes do

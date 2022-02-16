@@ -30,5 +30,6 @@ jobs:
 
       - name: Compile and Test
         run: |
+          brew install libffi
           mix deps.get
           mix test
