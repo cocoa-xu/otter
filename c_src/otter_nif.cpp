@@ -936,9 +936,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc,
       } else if (return_type == "s16") {
         ret = enif_make_int(env, *(int16_t *)rc);
       } else if (return_type == "u32") {
-          printf("here %d,  ret: %d\r\n", __LINE__, ret);
+          printf("here %d,  ret: %ld\r\n", __LINE__, ret);
         ret = enif_make_uint(env, *(uint32_t *)rc);
-        printf("here %d, *(uint32_t *)rc: %d, ret: %d\r\n", __LINE__, (uint32_t *)rc, ret);
+        printf("here %d, *(uint32_t *)rc: %d, ret: %ld\r\n", __LINE__, *(uint32_t *)rc, ret);
       } else if (return_type == "s32") {
         ret = enif_make_int(env, *(int32_t *)rc);
       } else if (return_type == "u64") {

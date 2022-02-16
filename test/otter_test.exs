@@ -133,7 +133,6 @@ defmodule OtterTest do
     IO.inspect("openclose3")
     {:ok, _add_two_32_sym} = Otter.address_to_symbol(add_two_32_addr)
     IO.inspect("openclose1222")
-    Otter.dlclose(image)
     IO.inspect("openclose122324532")
   end
 
