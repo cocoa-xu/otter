@@ -776,29 +776,31 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 break;
             }
         } else if (p.type == "va_args") {
-          // todo: handle va_args
-          args[i] = &ffi_type_pointer;
-          size_t value_slot;
-          auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
-          if (ffi_arg_res == nullptr || !ffi_arg_res->set(nullptr, value_slot)) {
-              ready = 0;
-              break;
-          }
-          type_index_resindex[args[i]][i] = value_slot;
-        } else {
-          auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term);
-          if (wrapper_it != nullptr) {
-            args[i] = &wrapper_it->ffi_struct_type;
-            void *resource_obj_ptr = nullptr;
-            if (!(ready = enif_get_resource(env, p.term, wrapper_it->resource_type, &resource_obj_ptr))) {
-              error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
-              break;
+            // todo: handle va_args
+            args[i] = &ffi_type_pointer;
+            size_t value_slot;
+            auto ffi_arg_res = (ffi_resources<void *> *)ffi_res[&ffi_type_pointer];
+            if (ffi_arg_res == nullptr || !ffi_arg_res->set(nullptr, value_slot)) {
+                ready = 0;
+                break;
             }
-            values[i] = resource_obj_ptr;
-          } else {
-            // todo: other types
-            printf("[debug] todo: arg%zu, type: %s\r\n", i, p.type.c_str());
-          }
+            type_index_resindex[args[i]][i] = value_slot;
+        } else {
+            auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term);
+            if (wrapper_it != nullptr) {
+                args[i] = &wrapper_it->ffi_struct_type;
+                void *resource_obj_ptr = nullptr;
+                if (!(ready = enif_get_resource(env, p.term, wrapper_it->resource_type, &resource_obj_ptr))) {
+                    error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
+                    break;
+                }
+                values[i] = resource_obj_ptr;
+            } else {
+                // todo: other types
+                printf("[debug] todo: arg%zu, type: %s\r\n", i, p.type.c_str());
+                ready = 0;
+                break;
+            }
         }
       }
 
