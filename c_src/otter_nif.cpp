@@ -250,7 +250,7 @@ public:
   FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = delete;
   ~FFIStructTypeWrapper() = default;
   static FFIStructTypeWrapper *
-  create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term);
+  create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, std::vector<FFIStructTypeWrapper *> &wrappers);
 
   ffi_type ffi_struct_type;
   ErlNifResourceType *resource_type;
@@ -285,7 +285,7 @@ static void * null_ptr_g = nullptr;
 
 // NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in
 // this func we convert it to id
-static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type) {
+static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type, std::vector<FFIStructTypeWrapper *> &wrappers) {
   if (!enif_is_list(env, arg_types_term)) {
       return 0;
   }
@@ -361,11 +361,13 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
 
             arg_types_term = tail;
         } else if (enif_is_tuple(env, type_term)) {
-            auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term);
+            auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term, wrappers);
             args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
             arg_types_term = tail;
-        } else if (auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info)) {
+            wrappers.push_back(struct_type);
+        } else if (auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info, wrappers)) {
             args_with_type.emplace_back(arg_value, arg_type_info, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+            wrappers.push_back(struct_type);
             arg_types_term = tail;
         } else {
             return 0;
@@ -382,7 +384,8 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
 
 FFIStructTypeWrapper *
 FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
-                                        ERL_NIF_TERM struct_return_type_term) {
+                                        ERL_NIF_TERM struct_return_type_term,
+                                        std::vector<FFIStructTypeWrapper *> &wrappers) {
     int arity = -1;
     const ERL_NIF_TERM *array;
     std::vector<arg_type> args_with_type;
@@ -401,11 +404,13 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
         return nullptr;
     }
 
-    if (get_args_with_type(env, array[2], args_with_type)) {
+    if (get_args_with_type(env, array[2], args_with_type, wrappers)) {
         auto wrapper = new FFIStructTypeWrapper(args_with_type.size() + 1);
 
         wrapper->struct_id = struct_id;
         wrapper->resource_type = get_ffi_struct_resource_type(env, struct_id);
+
+        // note: wrapper will be added to `wrappers` after it is returned from this function
         if (wrapper->resource_type) {
             for (size_t i = 0; i < args_with_type.size(); ++i) {
                 auto &p = args_with_type[i];
@@ -671,6 +676,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         return enif_make_badarg(env);
     }
 
+    std::vector<FFIStructTypeWrapper *> wrappers;
     OtterSymbol *symbol_res = nullptr;
 
     std::string return_type;
@@ -680,14 +686,15 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     if (erlang::nif::get_atom(env, argv[1], return_type) && !return_type.empty()) {
         // Do nothing
     } else {
-        struct_return_type = FFIStructTypeWrapper::create_from_tuple(env, argv[1]);
+        struct_return_type = FFIStructTypeWrapper::create_from_tuple(env, argv[1], wrappers);
         if (struct_return_type == nullptr) {
             return erlang::nif::error(env, "fail to create_from_tuple");
         }
+        wrappers.push_back(struct_return_type);
     }
 
   if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res) && symbol_res) {
-    if (!get_args_with_type(env, argv[2], args_with_type)) {
+    if (!get_args_with_type(env, argv[2], args_with_type, wrappers)) {
         return erlang::nif::error(env, "fail to get args_with_type");
     }
 
@@ -708,7 +715,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
           values = (void **)malloc(sizeof(void *) * args_with_type.size());
           if (values == nullptr) {
               free((void *)args);
-              if (struct_return_type) delete struct_return_type;
+              for (size_t i = 0; i < wrappers.size(); ++i) {
+                  auto wrapper_it = wrappers[i];
+                  delete wrapper_it;
+              }
+              wrappers.clear();
               return erlang::nif::error(env, "fail to allocate memory for ffi values");
           }
           memset((void*)values, 0, sizeof(void *) * args_with_type.size());
@@ -727,7 +738,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
       std::map<ffi_type *, std::map<size_t, size_t>> type_index_resindex;
       std::map<ffi_type *, void *> ffi_res;
       get_ffi_res<void *>(ffi_res, &ffi_type_pointer, true);
-      std::vector<FFIStructTypeWrapper *> wrappers;
 
       std::map<size_t, ffi_type> nd_array_type_map;
       int ready = 1;
@@ -790,7 +800,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
             type_index_resindex[args[i]][i] = value_slot;
         } else {
-            auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term);
+            auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term, wrappers);
             if (wrapper_it != nullptr) {
                 args[i] = &wrapper_it->ffi_struct_type;
                 void *resource_obj_ptr = nullptr;
@@ -976,9 +986,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         free_ffi_res<double>(ffi_res, &ffi_type_double);
         for (size_t i = 0; i < wrappers.size(); ++i) {
             auto wrapper_it = wrappers[i];
-            delete wrapper_it;
+            if (wrapper_it != struct_return_type) {
+                delete wrapper_it;
+            }
         }
-        wrappers.clear();
         if (args) free((void *)args);
         if (values) free((void *)values);
 
