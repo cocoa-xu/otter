@@ -197,9 +197,11 @@ register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
 
 static std::map<std::string, ErlNifResourceType *>
     struct_resource_type_registry{};
+std::mutex struct_resource_type_registry_lock;
 
 static ErlNifResourceType *
 get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
+  std::lock_guard<std::mutex> g(struct_resource_type_registry_lock);
   auto it = struct_resource_type_registry.find(struct_id);
   if (it == struct_resource_type_registry.end()) {
     auto t = register_ffi_struct_resource_type(env, struct_id);
@@ -357,7 +359,7 @@ static bool get_args_with_type(
   return 1;
 }
 
-static std::map<std::string, FFIStructTypeWrapper>
+static thread_local std::map<std::string, FFIStructTypeWrapper>
     struct_type_wrapper_registry{};
 
 FFIStructTypeWrapper *

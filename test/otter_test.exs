@@ -74,6 +74,22 @@ defmodule OtterTest do
     assert 1 == receive_s_u8_u16!(t)
   end
 
+  test "s_vptr" do
+    t = create_s_vptr!()
+    assert 1 == receive_s_vptr!(t)
+  end
+
+  test "complex-parallel" do
+    for i <- 0..:erlang.system_info(:logical_processors) do
+      Task.async(fn ->
+        t = create_complex!()
+        assert 1 == receive_complex!(t)
+        i
+      end)
+    end
+    |> Task.await_many
+  end
+
   test "complex" do
     t = create_complex!()
     assert 1 == receive_complex!(t)
