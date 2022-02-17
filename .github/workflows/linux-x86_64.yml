@@ -45,6 +45,6 @@ jobs:
           export ROOTDIR="$(dirname $(dirname ${START_BOOT}))"
           export EMU=beam
           bash -c "$ELREXEC $CMD_ARGS test" || true
-          bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) $ELREXEC $CMD_ARGS test" || true
+          bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
           mix test
