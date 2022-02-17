@@ -70,6 +70,8 @@ defmodule OtterTest do
   extern add_in_test(:u64, a :: u32, b :: u32)
   extern subtract_in_test(:u64, a :: u32, b :: u32)
   extern pass_func_ptr(:u64, a :: u32, b :: u32, op :: c_ptr)
+  
+  extern func_return_type_void(:void)
 
   test "add_two_32" do
     7 = add_two_32!(3, 4)
@@ -161,5 +163,9 @@ defmodule OtterTest do
     1 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(divide))
     66 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(add))
     18 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(subtract))
+  end
+  
+  test "void_return_type" do
+    func_return_type_void!()
   end
 end

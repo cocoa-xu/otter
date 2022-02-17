@@ -173,4 +173,8 @@ uint64_t pass_func_ptr(uint32_t a, uint32_t b, uint64_t(*op)(uint32_t, uint32_t)
     return op(a, b);
 }
 
+void func_return_type_void() {
+    
+}
+
 }
