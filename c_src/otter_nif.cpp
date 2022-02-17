@@ -1,10 +1,15 @@
 #include "nif_utils.hpp"
 #include <dlfcn.h>
 #include <erl_nif.h>
+#if __has_include(<ffi/ffi.h>)
+#include <ffi/ffi.h>
+#elif __has_include(<ffi.h>)
 #include <ffi.h>
+#endif
 #include <iostream>
 #include <mutex>
 #include <memory>
+#include <stdlib.h>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -185,6 +190,7 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
     {"s8", &ffi_type_sint8},   {"s16", &ffi_type_sint16},
     {"s32", &ffi_type_sint32}, {"s64", &ffi_type_sint64},
     {"f32", &ffi_type_float},  {"f64", &ffi_type_double},
+    {"void", &ffi_type_void},
 };
 
 static void resource_dtor(ErlNifEnv *, void *obj) {}
@@ -299,7 +305,7 @@ static void copy_ffi_type(std::shared_ptr<ffi_type> &shared_ffi_type, ffi_type &
     shared_ffi_type->size = copy_from.size;
     shared_ffi_type->alignment = copy_from.alignment;
     shared_ffi_type->type = copy_from.type;
-    shared_ffi_type->elements = copy_from.elements;
+    shared_ffi_type->elements = nullptr;
 }
 
 // NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in
@@ -637,7 +643,7 @@ static bool handle_arg(
         std::map<uint64_t, std::map<size_t, size_t>> &type_index_resindex, T _unused=0)
 {
     ERL_API_T value;
-    if (get_nif_term_value(env, p.term, &value)) {
+    if (args != nullptr && get_nif_term_value(env, p.term, &value)) {
         args[arg_index] = get_default_ffi_type<T>();
         auto ffi_arg_res = get_ffi_res<T>(ffi_res, (uint64_t)(uint64_t *)get_default_ffi_type<T>(), true);
         size_t value_slot = 0;
@@ -671,6 +677,9 @@ static bool handle_c_ptr_arg(
     size_t value_slot = 0;
     std::string null_c_ptr;
     OtterSymbol *symbol_res = nullptr;
+    if (args == nullptr) {
+        return false;
+    }
 
     if (enif_get_resource(env, p.term, OtterSymbol::type, (void **)&symbol_res) && symbol_res) {
         void *symbol = symbol_res->val;
@@ -734,7 +743,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         void *symbol = symbol_res->val;
         if (symbol != nullptr) {
             ffi_cif cif;
-            // NOTE: These values are small structs, allocating them on stack should be ok
+
             ffi_type ** args = nullptr;
             void **values = nullptr;
             if (args_with_type.size() > 0) {
@@ -776,6 +785,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             size_t arg_failed = 0;
             
             for (size_t i = 0; i < args_with_type.size(); ++i) {
+                if (args == nullptr) {
+                    ready = 0;
+                    error_msg = "cannot allocate memory for ffi args";
+                    break;
+                }
                 arg_failed = i;
                 auto &p = args_with_type[i];
                 if (p.type == "c_ptr") {
@@ -872,7 +886,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
             // verify ffi type info for args
             for (size_t i = 0; i < args_with_type.size(); i++) {
-                if (args[i] == nullptr) {
+                if (args == nullptr || args[i] == nullptr) {
                     ready = 0;
                     error_msg = "input argument type missing for arg at index " + std::to_string(i);
                 }
@@ -904,6 +918,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 if (ready) {
                     // fill values after ffi_prep_cif succeeded
                     for (size_t i = 0; ready && i < args_with_type.size(); i++) {
+                        if (args == nullptr) {
+                            ready = 0;
+                            error_msg = "input argument type info missing for arg at index " + std::to_string(i);
+                            break;
+                        }
+
                         if (type_index_resindex.find((uint64_t)(uint64_t *)args[i]) != type_index_resindex.end()) {
                             auto &index_resindex = type_index_resindex[(uint64_t)(uint64_t *)args[i]];
                             auto slot = index_resindex[i];
@@ -977,10 +997,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                         }
                     }
                     
-                    for (size_t i = 0; i < args_with_type.size(); i++) {
-                        if (values[i] == nullptr) {
+                    for (size_t i = 0; ready && i < args_with_type.size(); i++) {
+                        if (values == nullptr || values[i] == nullptr) {
                             ready = 0;
                             error_msg = "input argument value missing for arg at index " + std::to_string(i);
+                            break;
                         }
                     }
                     
