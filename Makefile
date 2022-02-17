@@ -8,7 +8,7 @@ TEST_SO = $(TEST_SRC)/test.so
 
 LIBFFI_CFLAGS = -I"$(shell pkg-config --variable=includedir libffi)"
 LIBFFI_LIBS = $(shell pkg-config --libs libffi)
-CPPFLAGS += $(CFLAGS) -std=c++14 -Wall -Wextra -pedantic -fPIC
+CPPFLAGS += $(CFLAGS) -std=c++17 -Wall -Wextra -pedantic -fPIC
 LDFLAGS += -shared
 
 UNAME_S := $(shell uname -s)

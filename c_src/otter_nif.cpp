@@ -1,7 +1,11 @@
 #include "nif_utils.hpp"
 #include <dlfcn.h>
 #include <erl_nif.h>
+#if __has_include(<ffi/ffi.h>)
 #include <ffi/ffi.h>
+#elif __has_include(<ffi.h>)
+#include <ffi.h>
+#endif
 #include <iostream>
 #include <mutex>
 #include <memory>
