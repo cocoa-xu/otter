@@ -165,7 +165,7 @@ defmodule Otter do
           {arg_name, arg_type} =
             if has_type_info do
               # e.g., [{:name, [line: 42], nil}, {:type, [line: 42], nil}]
-              [{arg_name, line, _}, {arg_type, _, _} | _] = extra
+              [{arg_name, _line, _}, {arg_type, _, _} | _] = extra
               {arg_name, arg_type}
             else
               # the `name` is the `type`

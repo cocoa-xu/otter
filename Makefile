@@ -6,7 +6,20 @@ LIB_SRC = $(shell pwd)/lib
 TEST_SRC = $(shell pwd)/test
 TEST_SO = $(TEST_SRC)/test.so
 
-LIBFFI_CFLAGS = -I"$(shell pkg-config --variable=includedir libffi)"
+LIBFFI_INCLUDE_DIR = "$(shell pkg-config --variable=includedir libffi)"
+ifneq ("$(wildcard $(LIBFFI_INCLUDE_DIR)/ffi.h)","")
+    # do nothing
+else
+ifneq ("$(wildcard $(LIBFFI_INCLUDE_DIR)/ffi/ffi.h)","")
+    LIBFFI_INCLUDE_DIR = $(LIBFFI_INCLUDE_DIR)/ffi
+else
+    # on some linux pkg-config --variable=includedir libffi
+    # returns /usr/include
+    # while the ffi.h is actually in /usr/include/x86_64-linux-gnu
+    # but we can compile the NIF library using #include <ffi.h>
+    # so let's hope it works
+endif
+endif
 LIBFFI_LIBS = $(shell pkg-config --libs libffi)
 CPPFLAGS += $(CFLAGS) -std=c++17 -Wall -Wextra -pedantic -fPIC
 LDFLAGS += -shared
@@ -34,5 +47,5 @@ $(TEST_SO):
 $(NIF_SO):
 	@ mkdir -p $(PRIV_DIR)
 	@ if [ -z "${SKIP_COMPILE}" ]; then \
-		$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) $(LIBFFI_CFLAGS) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO) ; \
+		$(CC) $(CPPFLAGS) -I$(ERTS_INCLUDE_DIR) -I$(LIBFFI_INCLUDE_DIR) $(LDFLAGS) $(C_SRC)/otter_nif.cpp $(LIBFFI_LIBS) -o $(NIF_SO) ; \
 	fi
