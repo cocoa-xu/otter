@@ -1,0 +1,25 @@
+image: elixir:1.13
+build:
+  stage: build
+  variables:
+    MIX_ENV: "test"
+  script:
+    - apt-get update
+    - apt-get install -y build-essential pkg-config bc m4 unzip zip curl git libssl-dev libncurses5-dev ca-certificates
+    - mix local.hex --force
+    - mix local.rebar --force
+    - mix deps.get
+    - export CFLAGS="-fsanitize=address -Og -g3 -DDEBUG_NIF=1 -fno-omit-frame-pointer"
+      export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
+      export CMD_ARGS="${CMD:3}"
+      export ERL="$(which erl)"
+      export ERL_BASE="$(dirname $(dirname ${ERL}))"
+      export ELREXEC="$(find "${ERL_BASE}" -name erlexec)"
+      export BINDIR="$(dirname ${ELREXEC})"
+      export START_BOOT="$(find $ERL_BASE -name start.boot | grep -v release)"
+      export ROOTDIR="$(dirname $(dirname ${START_BOOT}))"
+      export EMU=beam
+      bash -c "$ELREXEC $CMD_ARGS test" || true
+      bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
+      unset CFLAGS
+      mix test
