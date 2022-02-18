@@ -165,7 +165,7 @@ defmodule Otter do
               unique_arg_name = get_unique_arg_name(arg_name, index)
               {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
 
-            [{arg_name, line, _}, {arg_type, _, _}] ->
+            [{arg_name, _line, _}, {arg_type, _, _}] ->
               arg_name =
                 arg_name
                 |> Atom.to_string()
