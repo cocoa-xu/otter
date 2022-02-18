@@ -14,7 +14,7 @@ defmodule OtterTest do
   # };
   cstruct(s_u8_u16(u8 :: u8, u16 :: u16))
   extern create_s_u8_u16(s_u8_u16())
-  extern receive_s_u8_u16(:u32, s_u8_u16())
+  extern receive_s_u8_u16(:u32, s_u8_u16)
 
   # struct s_uints {
   #     uint8_t u8;
@@ -24,7 +24,7 @@ defmodule OtterTest do
   # };
   cstruct(s_uints(u8 :: u8, u16 :: u16, u32 :: u32, u64 :: u64))
   extern create_s_uints(s_uints())
-  extern receive_s_uints(:u32, s_uints())
+  extern receive_s_uints(:u32, t :: s_uints())
 
   # struct complex {
   #     uint8_t c1;
@@ -43,7 +43,7 @@ defmodule OtterTest do
     bar :: u32 # todo: embed another struct inside, bar :: s_u8_u16()
     ))
   extern create_complex(complex())
-  extern receive_complex(:u32, complex())
+  extern receive_complex(:u32, c :: complex())
 
   # struct matrix16x16 {
   #     uint32_t m[16][16];
