@@ -148,31 +148,49 @@ defmodule Otter do
     func_arg_types =
       func_args
       |> Enum.with_index(fn element, index -> {element, index} end)
-      |> Enum.map(fn
-        {{struct_name, line, []}, index} when is_atom(struct_name) ->
-          unique_arg_name = get_unique_arg_name(struct_name, index)
+      |> Enum.map(fn {{arg_name, line, extra}, index} ->
+          # first check if the argument is specified with name and type info
+          # if yes, then we have the following form
+          #     extern function_name(:return_type, name :: type)
+          #    in this case, the `arg_name` will be :"::"
+          #    and `extra` will be something like
+          #      [{:name, [line: 42], nil}, {:type, [line: 42], nil}]
+          # if not, it means that the code only specifies the argument type, e.g,
+          #     extern add_in_test(:u64, :u32, :u32)
+          #   this is like how we do it in some C headers
+          #     extern uint64_t add_in_test(uint32_t, uint32_t)
+          has_type_info = !(extra == [] or extra == nil)
 
-          struct_tuple =
-            quote do
-              unquote(struct_name)() |> Otter.transform_type()
+          # get the arg type for both cases mentioned above
+          {arg_name, arg_type} =
+            if has_type_info do
+              # e.g., [{:name, [line: 42], nil}, {:type, [line: 42], nil}]
+              [{arg_name, line, _}, {arg_type, _, _} | _] = extra
+              {arg_name, arg_type}
+            else
+              # the `name` is the `type`
+              # but we will need to generate a unique arg name for it
+              # otherwise the function we generated will be
+              #   def add_two_num(u32, u32)
+              # if the function declaration is something like this
+              #   extern add_two_num(:u64, u32, u32)
+              # we need to give them unique names like
+              #   def add_two_num(u32_0, u32_1)
+              unique_arg_name = get_unique_arg_name(arg_name, index)
+              {unique_arg_name, arg_name}
             end
 
-          {{unique_arg_name, line, nil}, struct_tuple}
-
-        {{arg_name, line, extra}, index} ->
-          case extra do
-            nil ->
-              unique_arg_name = get_unique_arg_name(arg_name, index)
-              {{unique_arg_name, line, extra}, "#{Atom.to_string(arg_name)}"}
-
-            [{arg_name, line, _}, {arg_type, _, _}] ->
-              arg_name =
-                arg_name
-                |> Atom.to_string()
-                |> then(&"#{&1}_#{index}")
-                |> String.to_atom()
-
-              {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
+          # check if we're dealing with basic types
+          is_basic_type = Enum.member?([:u8, :u16, :u32, :u64, :s8, :s16, :s32, :s64, :c_ptr, :f32, :f64], arg_type)
+          if is_basic_type do
+            {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
+          else
+            caller_module = __CALLER__.module
+            struct_tuple =
+              quote do
+                Kernel.apply(unquote(caller_module), unquote(arg_type), []) |> Otter.transform_type()
+              end
+            {{arg_name, line, nil}, struct_tuple}
           end
       end)
 
