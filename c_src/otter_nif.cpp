@@ -190,52 +190,6 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 
 static void resource_dtor(ErlNifEnv *, void *obj) {}
 
-// NOTE: the basic idea here we register a resource type for each struct type,
-// identified by struct_id.
-static ErlNifResourceType *
-register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
-    auto resource_type = enif_open_resource_type(
-      env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
-      ERL_NIF_RT_CREATE, nullptr);
-    return resource_type;
-}
-
-static std::map<std::string, ErlNifResourceType *>
-    struct_resource_type_registry{};
-static std::mutex struct_resource_type_registry_lock;
-
-static ErlNifResourceType *
-get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
-  std::lock_guard<std::mutex> g(struct_resource_type_registry_lock);
-  auto it = struct_resource_type_registry.find(struct_id);
-  if (it == struct_resource_type_registry.end()) {
-    auto t = register_ffi_struct_resource_type(env, struct_id);
-    struct_resource_type_registry[struct_id] = t;
-    return t;
-  } else {
-    return it->second;
-  }
-}
-
-static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
-                                             size_t return_object_size,
-                                             ErlNifResourceType *resource_type,
-                                             void *result, ERL_NIF_TERM &ret) {
-    if (resource_type && return_object_size && result) {
-        auto resource = enif_alloc_resource(resource_type, return_object_size);
-        if (resource) {
-            memcpy(resource, (void *)result, return_object_size);
-            ret = enif_make_resource(env, resource);
-            enif_release_resource(resource);
-            return true;
-        } else {
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
-
 class FFIStructTypeWrapper {
 public:
     FFIStructTypeWrapper(size_t field_size) {
@@ -266,14 +220,62 @@ public:
     FFIStructTypeWrapper(const FFIStructTypeWrapper &) = delete;
     FFIStructTypeWrapper &operator=(FFIStructTypeWrapper &) = delete;
     FFIStructTypeWrapper &operator=(const FFIStructTypeWrapper &) = delete;
-    static std::shared_ptr<FFIStructTypeWrapper>
-    create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers);
+    
+    static std::map<std::string, ErlNifResourceType *> struct_resource_type_registry;
+    static std::mutex struct_resource_type_registry_lock;
+    
+    static std::shared_ptr<FFIStructTypeWrapper> create_from_tuple(ErlNifEnv *env, ERL_NIF_TERM struct_return_type_term, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers);
+
+    // NOTE: the basic idea here we register a resource type for each struct type,
+    // identified by struct_id.
+    static ErlNifResourceType *
+    register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
+        auto resource_type = enif_open_resource_type(
+          env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+          ERL_NIF_RT_CREATE, nullptr);
+        return resource_type;
+    }
+    
+    static ERL_NIF_TERM make_ffi_struct_resource(ErlNifEnv *env,
+                                                 size_t return_object_size,
+                                                 ErlNifResourceType *resource_type,
+                                                 void *result, ERL_NIF_TERM &ret) {
+        if (resource_type && return_object_size && result) {
+            auto resource = enif_alloc_resource(resource_type, return_object_size);
+            if (resource) {
+                memcpy(resource, (void *)result, return_object_size);
+                ret = enif_make_resource(env, resource);
+                enif_release_resource(resource);
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    
+    static ErlNifResourceType *
+    get_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
+      std::lock_guard<std::mutex> g(struct_resource_type_registry_lock);
+      auto it = struct_resource_type_registry.find(struct_id);
+      if (it == struct_resource_type_registry.end()) {
+        auto t = register_ffi_struct_resource_type(env, struct_id);
+        struct_resource_type_registry[struct_id] = t;
+        return t;
+      } else {
+        return it->second;
+      }
+    }
 
     ffi_type ffi_struct_type;
     ErlNifResourceType *resource_type;
     std::string struct_id;
     std::vector<std::shared_ptr<ffi_type>> field_types;
 };
+
+std::mutex FFIStructTypeWrapper::struct_resource_type_registry_lock;
+std::map<std::string, ErlNifResourceType *> FFIStructTypeWrapper::struct_resource_type_registry;
 
 enum arg_passing_type {
     VALUE,
@@ -465,32 +467,30 @@ public:
     
     ~FFICall() {
         // clean up everything used as input arguments for ffi_call
-        free_ffi_res<void *>(&ffi_type_pointer);
-        free_ffi_res<uint8_t>(&ffi_type_uint8);
-        free_ffi_res<uint16_t>(&ffi_type_uint16);
-        free_ffi_res<uint32_t>(&ffi_type_uint32);
-        free_ffi_res<uint64_t>(&ffi_type_uint64);
-        free_ffi_res<int8_t>(&ffi_type_sint8);
-        free_ffi_res<int16_t>(&ffi_type_sint16);
-        free_ffi_res<int32_t>(&ffi_type_sint32);
-        free_ffi_res<int64_t>(&ffi_type_sint64);
-        free_ffi_res<float>(&ffi_type_float);
-        free_ffi_res<double>(&ffi_type_double);
-        for (size_t i = 0; i < struct_wrapper.size(); ++i) {
-            auto wrapper_it = struct_wrapper[i];
-            if (wrapper_it.get() != struct_return_type.get()) {
-                wrapper_it.reset();
-            }
-        }
-        
+        free_ffi_res<void *>();
+        free_ffi_res<uint8_t>();
+        free_ffi_res<uint16_t>();
+        free_ffi_res<uint32_t>();
+        free_ffi_res<uint64_t>();
+        free_ffi_res<int8_t>();
+        free_ffi_res<int16_t>();
+        free_ffi_res<int32_t>();
+        free_ffi_res<int64_t>();
+        free_ffi_res<float>();
+        free_ffi_res<double>();
+        struct_wrapper.clear();
+
         if (args) {
             free((void *)args);
             args = nullptr;
         }
-        
         if (values) {
             free((void *)values);
             values = nullptr;
+        }
+        if (rc) {
+            free(rc);
+            rc = nullptr;
         }
     }
     
@@ -649,7 +649,7 @@ public:
         
         if (return_object_size && rc) {
             if (struct_return_type) {
-                if (!make_ffi_struct_resource(env_, return_object_size, struct_return_type->resource_type, rc, return_value)) {
+                if (!FFIStructTypeWrapper::make_ffi_struct_resource(env_, return_object_size, struct_return_type->resource_type, rc, return_value)) {
                     struct_return_type.reset();
                     ready = false;
                     error_msg = "cannot make_ffi_struct_resource";
@@ -686,19 +686,7 @@ public:
         } else {
             return_value = erlang::nif::ok(env_);
         }
-        
-        if (args) {
-            free((void *)args);
-            args = nullptr;
-        }
-        if (values) {
-            free((void *)values);
-            values = nullptr;
-        }
-        if (rc) {
-            free(rc);
-            rc = nullptr;
-        }
+
         return ready;
     }
 
@@ -764,67 +752,67 @@ public:
                 auto &index_resindex = type_index_resindex[(uint64_t)(uint64_t *)args[i]];
                 auto slot = index_resindex[i];
                 if (args[i] == &ffi_type_pointer) {
-                    auto ffi_arg_res = get_ffi_res<void *>(get_default_ffi_type<void *>(), true);
+                    auto ffi_arg_res = get_ffi_res<void *>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a void * arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_uint8) {
-                    auto ffi_arg_res = get_ffi_res<uint8_t>(get_default_ffi_type<uint8_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<uint8_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a uint8_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_uint16) {
-                    auto ffi_arg_res = get_ffi_res<uint16_t>(get_default_ffi_type<uint16_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<uint16_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a uint16_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_uint32) {
-                    auto ffi_arg_res = get_ffi_res<uint32_t>(get_default_ffi_type<uint32_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<uint32_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a uint32_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_uint64) {
-                    auto ffi_arg_res = get_ffi_res<uint64_t>(get_default_ffi_type<uint64_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<uint64_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a uint64_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_sint8) {
-                    auto ffi_arg_res = get_ffi_res<int8_t>(get_default_ffi_type<int8_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<int8_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for an int8_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_sint16) {
-                    auto ffi_arg_res = get_ffi_res<int16_t>(get_default_ffi_type<int16_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<int16_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for an int16_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_sint32) {
-                    auto ffi_arg_res = get_ffi_res<int32_t>(get_default_ffi_type<int32_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<int32_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for an int32_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_sint64) {
-                    auto ffi_arg_res = get_ffi_res<int64_t>(get_default_ffi_type<int64_t>(), true);
+                    auto ffi_arg_res = get_ffi_res<int64_t>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for an int64_t arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_float) {
-                    auto ffi_arg_res = get_ffi_res<float>(get_default_ffi_type<float>(), true);
+                    auto ffi_arg_res = get_ffi_res<float>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a float arg";
                         break;
                     }
                 } else if (args[i] == &ffi_type_double) {
-                    auto ffi_arg_res = get_ffi_res<double>(get_default_ffi_type<double>(), true);
+                    auto ffi_arg_res = get_ffi_res<double>();
                     if (!(ok = (ffi_arg_res && ffi_arg_res->get(slot, values[i])))) {
                         error_msg = "invalid ffi resource for a double arg";
                         break;
@@ -1156,7 +1144,7 @@ public:
     }
     
     bool handle_c_ptr_arg(int(*get_nif_term_value)(ErlNifEnv *, ERL_NIF_TERM, int64_t *), std::shared_ptr<arg_type> &p, size_t arg_index) {
-        auto ffi_arg_res = get_ffi_res<void *>(get_default_ffi_type<void *>(), true);
+        auto ffi_arg_res = get_ffi_res<void *>();
         // if enif_inspect_binary succeeded,
         // `binary.data` will live until we return to erlang
         ErlNifBinary binary;
@@ -1212,7 +1200,7 @@ public:
         ERL_API_T value;
         if (args != nullptr && get_nif_term_value(env_, p->term, &value)) {
             args[arg_index] = get_default_ffi_type<T>();
-            auto ffi_arg_res = get_ffi_res<T>(get_default_ffi_type<T>(), true);
+            auto ffi_arg_res = get_ffi_res<T>();
             size_t value_slot = 0;
             if (ffi_arg_res && ffi_arg_res->set((T)value, value_slot)) {
                 type_index_resindex[(uint64_t)(uint64_t *)args[arg_index]][arg_index] = value_slot;
@@ -1264,7 +1252,7 @@ public:
 
         if (p->pass_by == ADDR) {
             args[arg_index] = get_default_ffi_type<void *>();
-            auto ffi_arg_by_addr_res = get_ffi_res<void *>(get_default_ffi_type<void *>(), true);
+            auto ffi_arg_by_addr_res = get_ffi_res<void *>();
             void * res_address = nullptr;
             if (ffi_arg_res && ffi_arg_by_addr_res &&
                 ffi_arg_res->get(value_slot, res_address) &&
@@ -1331,7 +1319,7 @@ public:
         ERL_NIF_TERM &out_term,
         std::string &out_error)
     {
-        auto ffi_arg_res = get_ffi_res<T>(get_default_ffi_type<T>(), true);
+        auto ffi_arg_res = get_ffi_res<T>();
         T value;
         if (ffi_arg_res && ffi_arg_res->get_value(p->value_slot_original, value)) {
             out_term = make_term(env_, value);
@@ -1343,21 +1331,19 @@ public:
     }
 
     template <typename T>
-    auto get_ffi_res(ffi_type * type, bool allow_new) -> ffi_resources<T> * {
-        auto u64_type = (uint64_t)(uint64_t *)type;
+    auto get_ffi_res() -> ffi_resources<T> * {
+        auto u64_type = (uint64_t)(uint64_t *)get_default_ffi_type<T>();
         if (ffi_res.find(u64_type) != ffi_res.end()) {
             return (ffi_resources<T> *)ffi_res[u64_type];
-        } else if (allow_new) {
+        } else {
             ffi_res[u64_type] = new ffi_resources<T>();
             return (ffi_resources<T> *)ffi_res[u64_type];
-        } else {
-            return nullptr;
         }
     }
 
     template <typename T>
-    void free_ffi_res(ffi_type * type) {
-        auto u64_type = (uint64_t)(uint64_t *)type;
+    void free_ffi_res() {
+        auto u64_type = (uint64_t)(uint64_t *)get_default_ffi_type<T>();
         if (ffi_res.find(u64_type) != ffi_res.end()) {
             auto p = (ffi_resources<T> *)ffi_res[u64_type];
             if (p) delete p;
