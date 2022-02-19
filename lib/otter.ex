@@ -155,6 +155,83 @@ defmodule Otter do
     acc
   end
 
+  defp va_args_only_at_the_end([]) do
+    true
+  end
+
+  defp va_args_only_at_the_end([:va_args | []]) do
+    true
+  end
+
+  defp va_args_only_at_the_end([:va_args | _arg_types]) do
+    false
+  end
+
+  defp va_args_only_at_the_end([_cur_type | arg_types]) do
+    va_args_only_at_the_end(arg_types)
+  end
+
+  def as_type(value, int_type) when is_number(value) and
+    (int_type == :u8 or int_type == :u16 or int_type == :u32 or int_type == :u64 or
+     int_type == :s8 or int_type == :s16 or int_type == :s32 or int_type == :s64) do
+    {:ok, {trunc(value), %{type: Atom.to_string(int_type)}}}
+  end
+
+  def as_type(value, fp_type) when is_number(value) and (fp_type == :f32 or fp_type == :f64) do
+    {:ok, {trunc(value), %{type: Atom.to_string(fp_type)}}}
+  end
+
+  def as_type({value, types}, to_type) when is_map(types) do
+    with {:ok, {new_value, %{type: new_type}}} <- as_type(value, to_type) do
+      {:ok, {new_value, Map.update(types, :type, new_type, fn _ -> new_type end)}}
+    else
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def as_type(value, to_type) do
+    {:error, "cannot convert '#{inspect(value)}' to type '#{inspect(to_type)}'"}
+  end
+
+  deferror as_type(value, to_type)
+
+  def pass_by({value, types}, :addr, :out) when is_map(types) do
+    {:ok, {value,
+      Map.update(types, :addr, true, fn _ -> true end)
+      |> Map.update(:out, true, fn _ -> true end)
+      |> Map.pop(:ref) |> elem(1)
+    }}
+  end
+
+  def pass_by({value, types}, :addr) when is_map(types) do
+    {:ok, {value,
+      Map.update(types, :addr, true, fn _ -> true end)
+      |> Map.pop(:ref) |> elem(1)
+      |> Map.pop(:out) |> elem(1)
+    }}
+  end
+
+  def pass_by({value, types}, :value) when is_map(types) do
+    {:ok, {value,
+      types
+      |> Map.pop(:addr) |> elem(1)
+      |> Map.pop(:ref) |> elem(1)
+      |> Map.pop(:out) |> elem(1)
+    }}
+  end
+
+  def pass_by({value, types}, :ref) when is_map(types) do
+    {:ok, {value,
+      Map.update(types, :ref, true, fn _ -> true end)
+      |> Map.update(:out, true, fn _ -> true end)
+      |> Map.pop(:addr) |> elem(1)
+    }}
+  end
+
+  deferror pass_by(arg, by)
+  deferror pass_by(arg, by, out)
+
   defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
     [return_type | func_args] = args
@@ -200,12 +277,16 @@ defmodule Otter do
           if is_basic_type do
             {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}", attributes}
           else
-            caller_module = __CALLER__.module
-            struct_tuple =
-              quote do
-                Kernel.apply(unquote(caller_module), unquote(arg_type), []) |> Otter.transform_type()
-              end
-            {{arg_name, line, nil}, struct_tuple, attributes}
+            if arg_type == :va_args do
+              {{arg_name, line, nil}, "va_args", []}
+            else
+              caller_module = __CALLER__.module
+              struct_tuple =
+                quote do
+                  Kernel.apply(unquote(caller_module), unquote(arg_type), []) |> Otter.transform_type()
+                end
+              {{arg_name, line, nil}, struct_tuple, attributes}
+            end
           end
       end)
 
@@ -216,6 +297,7 @@ defmodule Otter do
     arg_types =
       func_arg_types
       |> Enum.map(&elem(&1, 1))
+    true = va_args_only_at_the_end(arg_types)
 
     types_attributes =
       func_arg_types

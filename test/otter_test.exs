@@ -76,6 +76,8 @@ defmodule OtterTest do
   extern pass_by_addr_read_only(:u32, val_addr :: u32-addr)
   extern pass_by_addr_read_write(:u32, val_addr :: u32-addr-out)
 
+  extern variadic_func_pass_by_values(:u64, n :: u32, array :: va_args)
+
   test "add_two_32" do
     7 = add_two_32!(3, 4)
   end
@@ -180,5 +182,17 @@ defmodule OtterTest do
     {return_val, out_values} = pass_by_addr_read_write!(1)
     assert 1 == return_val
     assert [2] = out_values
+  end
+
+  test "variadic function/arguments passed by values" do
+    val = [1, 2, 3, 4, 5]
+    n = Enum.count(val)
+    sum = Enum.sum(val)
+    val =
+      val
+      |> Enum.map(fn v ->
+        Otter.as_type!(v, :u32)
+      end)
+    ^sum = variadic_func_pass_by_values!(n, val)
   end
 end

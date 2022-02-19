@@ -1,11 +1,7 @@
 #include "nif_utils.hpp"
 #include <dlfcn.h>
 #include <erl_nif.h>
-#if __has_include(<ffi/ffi.h>)
-#include <ffi/ffi.h>
-#elif __has_include(<ffi.h>)
 #include <ffi.h>
-#endif
 #include <iostream>
 #include <mutex>
 #include <memory>
@@ -294,6 +290,9 @@ public:
         is_out = false;
         value_slot = 0;
         value_slot_original = 0;
+        is_va_args = false;
+        is_struct_instance = false;
+        struct_data = nullptr;
     }
 
     ERL_NIF_TERM term;
@@ -319,6 +318,12 @@ public:
     //       and ffi_arg_type will be the corresponding pointer type
     arg_passing_type pass_by;
     bool is_out;
+    bool is_va_args;
+
+    bool is_struct_instance;
+    // borrowed data from erlang vm
+    // do not free struct_data
+    void * struct_data;
 };
 
 static void * null_ptr_g = nullptr;
@@ -332,7 +337,7 @@ static void copy_ffi_type(std::shared_ptr<ffi_type> &shared_ffi_type, ffi_type &
 
 // NOTE: [{value, type}], if type is a struct tuple {:struct, id, fields}, in
 // this func we convert it to id
-static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers) {
+static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std::vector<arg_type> &args_with_type, size_t prev_size, std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers) {
     if (!enif_is_list(env, arg_types_term)) {
         return 0;
     }
@@ -342,7 +347,7 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
         return 0;
     }
 
-    args_with_type.reserve(length);
+    args_with_type.reserve(prev_size + length);
     ERL_NIF_TERM head, tail;
 
     while (enif_get_list_cell(env, arg_types_term, &head, &tail)) {
@@ -417,7 +422,7 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                         copy_ffi_type(arg_with_type.ffi_arg_type, ffi_type_double);
                     } else if (arg_with_type.type == "va_args") {
                         arg_with_type.ffi_arg_type = std::make_shared<ffi_type>();
-                        copy_ffi_type(arg_with_type.ffi_arg_type, ffi_type_pointer);
+                        arg_with_type.is_va_args = true;
                     }
 
                     if (arg_with_type.size > 0) {
@@ -433,9 +438,15 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                     arg_types_term = tail;
                 } else if (enif_is_tuple(env, type_term)) {
                     auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, type_term, wrappers);
-                    args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
-                    arg_types_term = tail;
-                    wrappers.push_back(struct_type);
+                    if (struct_type) {
+                        args_with_type.emplace_back(arg_value, type_term, struct_type->struct_id, 0, enif_make_atom(env, "nil"));
+                        wrappers.push_back(struct_type);
+                        arg_types_term = tail;
+                    } else {
+                        // other tuples?
+                        printf("[debug] tuple but not struct\r\n");
+                        return 0;
+                    }
                 } else {
                     auto struct_type = FFIStructTypeWrapper::create_from_tuple(env, arg_type_info, wrappers);
                     if (struct_type) {
@@ -450,10 +461,11 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                 return 0;
             }
         } else {
+            // just values
             return 0;
         }
     }
-    return args_with_type.size() == length;
+    return (args_with_type.size() - prev_size) == length;
 }
 
 std::shared_ptr<FFIStructTypeWrapper>
@@ -478,7 +490,7 @@ FFIStructTypeWrapper::create_from_tuple(ErlNifEnv *env,
         return nullptr;
     }
 
-    if (get_args_with_type(env, array[2], args_with_type, wrappers)) {
+    if (get_args_with_type(env, array[2], args_with_type, 0, wrappers)) {
         auto wrapper = std::make_shared<FFIStructTypeWrapper>(args_with_type.size() + 1);
 
         wrapper->struct_id = struct_id;
@@ -851,6 +863,201 @@ static bool handle_out_values(ErlNifEnv *env, arg_type &p, std::map<uint64_t, vo
     return ok;
 }
 
+static bool handle_va_args(
+        ErlNifEnv *env,
+        std::vector<arg_type> &var_args_with_type,
+        std::vector<size_t> &out_value_indexes,
+        arg_type &va_args,
+        ffi_type **&args,
+        size_t va_arg_index,
+        std::map<uint64_t, void *> &ffi_res,
+        std::map<uint64_t, std::map<size_t, size_t>> &type_index_resindex,
+        std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers,
+        std::string &error_msg);
+
+static bool process_args_with_type(
+    ErlNifEnv *env,
+    std::vector<arg_type> &args_with_type,
+    size_t &num_fixed_args,
+    std::vector<size_t> &out_value_indexes,
+    std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers,
+    ffi_type **&args,
+    size_t arg_offset,
+    std::map<uint64_t, void *> &ffi_res,
+    std::map<uint64_t, std::map<size_t, size_t>> &type_index_resindex,
+    std::string &error_msg,
+    bool allow_va_args)
+{
+    // :va_args can only appear in the last position
+    // note that :va_args is a pseudo-type in Otter
+    // where :va_list is the real underlying type defined in stdarg.h
+    // and :va_list is the one you can pass around in C
+    bool ok = true;
+    bool last_is_va_args = false;
+    size_t arg_failed = 0;
+
+    size_t total_size = args_with_type.size();
+    for (size_t i = arg_offset; i < total_size; ++i) {
+        if (args == nullptr) {
+            error_msg = "cannot allocate memory for ffi args";
+            ok = false;
+            break;
+        }
+
+        if (last_is_va_args) {
+            error_msg = "va_args can only appear at the end of the input argument list";
+            ok = false;
+            break;
+        }
+
+        num_fixed_args += 1;
+        arg_failed = i;
+        auto &p = args_with_type[i];
+        if (p.is_out) {
+            out_value_indexes.push_back(i);
+        }
+
+        if (p.type == "c_ptr") {
+            if (!handle_c_ptr_arg(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "s8") {
+            if (!handle_arg<int8_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "s16") {
+            if (!handle_arg<int16_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "s32") {
+            if (!handle_arg<int32_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "s64") {
+            if (!handle_arg<int64_t, int64_t>(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "u8") {
+            if (!handle_arg<uint8_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "u16") {
+            if (!handle_arg<uint16_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "u32") {
+            if (!handle_arg<uint32_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "u64") {
+            if (!handle_arg<uint64_t, uint64_t>(env, erlang::nif::get_uint64, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "f32") {
+            if (!handle_arg<float, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "f64") {
+            if (!handle_arg<double, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex)) {
+                ok = false;
+                break;
+            }
+        } else if (p.type == "va_args") {
+            if (allow_va_args) {
+                // notes:
+                //  - `error_msg` will be set in handle_va_args
+                //  - `args` will be realloc'ed in handle_va_args
+                if (!handle_va_args(env, args_with_type, out_value_indexes, p, args, i, ffi_res, type_index_resindex, wrappers, error_msg)) {
+                    ok = false;
+                    break;
+                } else {
+                    last_is_va_args = true;
+                    num_fixed_args -= 1;
+                }
+            } else {
+                error_msg = "type :va_args only allow to appear once as the type of the last argument";
+                ok = false;
+                break;
+            }
+        } else {
+            auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term, wrappers);
+            if (wrapper_it != nullptr) {
+                args[i] = &wrapper_it->ffi_struct_type;
+                // https://www.erlang.org/doc/man/erl_nif.html#enif_get_resource
+                // enif_get_resource does not add a reference to the resource object.
+                // However, the pointer received in *objp is guaranteed to be valid
+                // at least as long as the resource handle term is valid.
+                void *resource_obj_ptr = nullptr;
+                if (!enif_get_resource(env, p.term, wrapper_it->resource_type, &resource_obj_ptr)) {
+                    error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
+                    ok = false;
+                    break;
+                }
+                p.is_struct_instance = true;
+                p.struct_data = resource_obj_ptr;
+
+                wrappers.push_back(wrapper_it);
+            } else {
+                // todo: other types
+                printf("[debug] todo: arg%zu, type: %s\r\n", i, p.type.c_str());
+                error_msg = "process_args_with_type =: not implemented for type" + p.type;
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    return ok;
+}
+
+bool handle_va_args(
+        ErlNifEnv *env,
+        std::vector<arg_type> &args_with_type,
+        std::vector<size_t> &out_value_indexes,
+        arg_type &va_args,
+        ffi_type **&args,
+        size_t va_arg_index,
+        std::map<uint64_t, void *> &ffi_res,
+        std::map<uint64_t, std::map<size_t, size_t>> &type_index_resindex,
+        std::vector<std::shared_ptr<FFIStructTypeWrapper>> &wrappers,
+        std::string &error_msg)
+{
+    // va_args.term should be a list with elements like
+    //   1. just a value
+    //   2. {value, :type}
+    //   3. {value, %{type: TYPE, extra: EXTRA}}
+
+    // call pop_back because the last one is :va_args
+    args_with_type.pop_back();
+    if (get_args_with_type(env, va_args.term, args_with_type, va_arg_index, wrappers)) {
+        size_t total_args = args_with_type.size();
+        void * new_args = realloc((void *)args, sizeof(ffi_type *) * total_args);
+        if (new_args == nullptr) {
+            free((void *)args);
+            args = nullptr;
+            error_msg = "cannot allocate enough memory for function arguments";
+            return false;
+        }
+        args = (ffi_type **)new_args;
+
+        size_t num_var_args = 0;
+        return process_args_with_type(env, args_with_type, num_var_args, out_value_indexes, wrappers, args, va_arg_index, ffi_res, type_index_resindex, error_msg, false);
+    } else {
+        printf("cannot get va_args!!!!\r\n");
+        return false;
+    }
+}
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) {
         return enif_make_badarg(env);
@@ -863,6 +1070,8 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     std::shared_ptr<FFIStructTypeWrapper> struct_return_type = nullptr;
 
     std::vector<arg_type> args_with_type;
+    size_t num_fixed_args = 0;
+    size_t num_variadic_args = 0;
     if (erlang::nif::get_atom(env, argv[1], return_type) && !return_type.empty()) {
         // Do nothing
     } else {
@@ -874,7 +1083,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     }
 
     if (enif_get_resource(env, argv[0], OtterSymbol::type, (void **)&symbol_res) && symbol_res) {
-        if (!get_args_with_type(env, argv[2], args_with_type, wrappers)) {
+        if (!get_args_with_type(env, argv[2], args_with_type, 0, wrappers)) {
             return erlang::nif::error(env, "fail to get args_with_type");
         }
 
@@ -891,18 +1100,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     return erlang::nif::error(env, "fail to allocate memory for ffi args");
                 }
                 memset((void*)args, 0, sizeof(ffi_type *) * args_with_type.size());
-
-                values = (void **)malloc(sizeof(void *) * args_with_type.size());
-                if (values == nullptr) {
-                    free((void *)args);
-                    for (size_t i = 0; i < wrappers.size(); ++i) {
-                        auto wrapper_it = wrappers[i];
-                        wrapper_it.reset();
-                    }
-                    wrappers.clear();
-                    return erlang::nif::error(env, "fail to allocate memory for ffi values");
-                }
-                memset((void*)values, 0, sizeof(void *) * args_with_type.size());
             }
             
             ffi_type * ffi_return_type = nullptr;
@@ -919,101 +1116,9 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             std::map<uint64_t, void *> ffi_res;
             get_ffi_res<void *>(ffi_res, (uint64_t)(uint64_t *)&ffi_type_pointer, true);
 
-            std::map<size_t, ffi_type> nd_array_type_map;
             int ready = 1;
-            size_t arg_failed = 0;
-            
-            for (size_t i = 0; i < args_with_type.size(); ++i) {
-                if (args == nullptr) {
-                    ready = 0;
-                    error_msg = "cannot allocate memory for ffi args";
-                    break;
-                }
-                arg_failed = i;
-                auto &p = args_with_type[i];
-                if (p.is_out) {
-                    out_value_indexes.push_back(i);
-                }
-
-                if (p.type == "c_ptr") {
-                    if (!(ready = handle_c_ptr_arg(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "s8") {
-                  if (!(ready = handle_arg<int8_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
-                      break;
-                  }
-                } else if (p.type == "s16") {
-                    if (!(ready = handle_arg<int16_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "s32") {
-                    if (!(ready = handle_arg<int32_t, int>(env, erlang::nif::get_sint, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "s64") {
-                    if (!(ready = handle_arg<int64_t, int64_t>(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "u8") {
-                    if (!(ready = handle_arg<uint8_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "u16") {
-                    if (!(ready = handle_arg<uint16_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "u32") {
-                    if (!(ready = handle_arg<uint32_t, unsigned int>(env, erlang::nif::get_uint, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "u64") {
-                    if (!(ready = handle_arg<uint64_t, uint64_t>(env, erlang::nif::get_uint64, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "f32") {
-                    if (!(ready = handle_arg<float, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "f64") {
-                    if (!(ready = handle_arg<double, double>(env, erlang::nif::get_f64, p, args, i, ffi_res, type_index_resindex))) {
-                        break;
-                    }
-                } else if (p.type == "va_args") {
-                    // todo: handle va_args
-                    args[i] = &ffi_type_pointer;
-                    size_t value_slot;
-                    auto ffi_arg_res = get_ffi_res<void *>(ffi_res, (uint64_t)(uint64_t *)get_default_ffi_type<void *>(), true);
-                    if (ffi_arg_res == nullptr || !ffi_arg_res->set(nullptr, value_slot)) {
-                        ready = 0;
-                        break;
-                    }
-                    type_index_resindex[(uint64_t)(uint64_t *)args[i]][i] = value_slot;
-                } else {
-                    auto wrapper_it = FFIStructTypeWrapper::create_from_tuple(env, p.type_term, wrappers);
-                    if (wrapper_it != nullptr) {
-                        args[i] = &wrapper_it->ffi_struct_type;
-                        void *resource_obj_ptr = nullptr;
-                        if (!(ready = enif_get_resource(env, p.term, wrapper_it->resource_type, &resource_obj_ptr))) {
-                            error_msg = "failed to get resource for struct: " + wrapper_it->struct_id;
-                            break;
-                        }
-
-                        values[i] = resource_obj_ptr;
-                        wrappers.push_back(wrapper_it);
-                    } else {
-                        // todo: other types
-                        printf("[debug] todo: arg%zu, type: %s\r\n", i, p.type.c_str());
-                        ready = 0;
-                        break;
-                    }
-                }
-            }
-
-            if (!ready) {
-                if (error_msg.empty()) {
-                    error_msg = "failed to get input argument #" + std::to_string(arg_failed) + ": " + args_with_type[arg_failed].type;
-                }
+            if ((ready = process_args_with_type(env, args_with_type, num_fixed_args, out_value_indexes, wrappers, args, 0, ffi_res, type_index_resindex, error_msg, true))) {
+                num_variadic_args = args_with_type.size() - num_fixed_args;
             }
 
             if (ready) {
@@ -1028,7 +1133,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
 
             // verify ffi type info for args
-            for (size_t i = 0; i < args_with_type.size(); i++) {
+            for (size_t i = 0; i < num_fixed_args + num_variadic_args; i++) {
                 if (args == nullptr || args[i] == nullptr) {
                     ready = 0;
                     error_msg = "input argument type missing for arg at index " + std::to_string(i);
@@ -1044,7 +1149,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             ERL_NIF_TERM ret;
             ffi_status prep_status;
             if (ready) {
-                prep_status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args);
+                if (num_variadic_args > 0) {
+                    prep_status = ffi_prep_cif_var(&cif, FFI_DEFAULT_ABI, num_fixed_args,
+                                                   num_fixed_args + num_variadic_args, ffi_return_type, args);
+                } else {
+                    prep_status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, num_fixed_args, ffi_return_type, args);
+                }
                 if (prep_status != FFI_OK) {
                     ready = 0;
                     // overwrite previous error message if there wasn't one
@@ -1071,8 +1181,23 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 }
 
                 if (ready) {
+                    values = (void **)malloc(sizeof(void *) * (num_fixed_args + num_variadic_args));
+                    if (values == nullptr) {
+                        if (args) {
+                            free((void *)args);
+                        }
+
+                        for (size_t i = 0; i < wrappers.size(); ++i) {
+                            auto wrapper_it = wrappers[i];
+                            wrapper_it.reset();
+                        }
+                        wrappers.clear();
+                        return erlang::nif::error(env, "fail to allocate memory for ffi values");
+                    }
+                    memset((void*)values, 0, sizeof(void *) * (num_fixed_args + num_variadic_args));
+
                     // fill values after ffi_prep_cif succeeded
-                    for (size_t i = 0; ready && i < args_with_type.size(); i++) {
+                    for (size_t i = 0; ready && i < (num_fixed_args + num_variadic_args); i++) {
                         if (args == nullptr) {
                             ready = 0;
                             error_msg = "input argument type info missing for arg at index " + std::to_string(i);
@@ -1149,10 +1274,20 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                                     break;
                                 }
                             }
+                        } else {
+                            auto &p = args_with_type[i];
+                            if (p.is_struct_instance) {
+                                if (p.struct_data) {
+                                    values[i] = p.struct_data;
+                                } else {
+                                    ready = 0;
+                                    break;
+                                }
+                            }
                         }
                     }
-                    
-                    for (size_t i = 0; ready && i < args_with_type.size(); i++) {
+
+                    for (size_t i = 0; ready && i < (num_fixed_args + num_variadic_args); i++) {
                         if (values == nullptr || values[i] == nullptr) {
                             ready = 0;
                             error_msg = "input argument value missing for arg at index " + std::to_string(i);
