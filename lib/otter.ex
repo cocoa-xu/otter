@@ -141,6 +141,20 @@ defmodule Otter do
     name
   end
 
+  defp handle_dash_form_type({arg_type, _line, []}, acc) do
+    [arg_type | acc]
+  end
+
+  defp handle_dash_form_type({arg_type, _line, nil}, acc) do
+    [arg_type | acc]
+  end
+
+  defp handle_dash_form_type({:-, _line, [exp1, exp2]}, acc) do
+    acc = handle_dash_form_type(exp2, acc)
+    acc = handle_dash_form_type(exp1, acc)
+    acc
+  end
+
   defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
     [return_type | func_args] = args
@@ -162,11 +176,12 @@ defmodule Otter do
           has_type_info = !(extra == [] or extra == nil)
 
           # get the arg type for both cases mentioned above
-          {arg_name, arg_type} =
+          {arg_name, arg_type, attributes} =
             if has_type_info do
               # e.g., [{:name, [line: 42], nil}, {:type, [line: 42], nil}]
-              [{arg_name, _line, _}, {arg_type, _, _} | _] = extra
-              {arg_name, arg_type}
+              [{arg_name, _line, _}, {arg_type, type_line, type_extra} | _] = extra
+              [arg_type | type_attributes] = handle_dash_form_type({arg_type, type_line, type_extra}, [])
+              {arg_name, arg_type, type_attributes}
             else
               # the `name` is the `type`
               # but we will need to generate a unique arg name for it
@@ -177,20 +192,20 @@ defmodule Otter do
               # we need to give them unique names like
               #   def add_two_num(u32_0, u32_1)
               unique_arg_name = get_unique_arg_name(arg_name, index)
-              {unique_arg_name, arg_name}
+              {unique_arg_name, arg_name, []}
             end
 
           # check if we're dealing with basic types
           is_basic_type = Enum.member?([:u8, :u16, :u32, :u64, :s8, :s16, :s32, :s64, :c_ptr, :f32, :f64], arg_type)
           if is_basic_type do
-            {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}"}
+            {{arg_name, line, nil}, "#{Atom.to_string(arg_type)}", attributes}
           else
             caller_module = __CALLER__.module
             struct_tuple =
               quote do
                 Kernel.apply(unquote(caller_module), unquote(arg_type), []) |> Otter.transform_type()
               end
-            {{arg_name, line, nil}, struct_tuple}
+            {{arg_name, line, nil}, struct_tuple, attributes}
           end
       end)
 
@@ -201,6 +216,10 @@ defmodule Otter do
     arg_types =
       func_arg_types
       |> Enum.map(&elem(&1, 1))
+
+    types_attributes =
+      func_arg_types
+      |> Enum.map(&elem(&1, 2))
 
     quote do
       @load_from Module.get_attribute(
@@ -220,9 +239,14 @@ defmodule Otter do
         with {:ok, image} <- Otter.dlopen(@load_from, @load_mode),
              {:ok, symbol} <- Otter.dlsym(image, func_name) do
           type_info =
-            Enum.map([unquote_splicing(arg_types)], fn cur_type ->
-              %{type: cur_type}
+            [unquote_splicing(arg_types)]
+            |> Enum.zip(unquote(types_attributes))
+            |> Enum.map(fn {cur_type, cur_attr} ->
+                Enum.reduce(cur_attr, %{type: cur_type}, fn t, acc ->
+                  Map.put_new(acc, t, true)
+                end)
             end)
+
           Otter.invoke(
             symbol,
             return_type,

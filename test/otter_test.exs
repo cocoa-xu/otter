@@ -73,6 +73,9 @@ defmodule OtterTest do
   
   extern func_return_type_void(:void)
 
+  extern pass_by_addr_read_only(:u32, val_addr :: u32-addr)
+  extern pass_by_addr_read_write(:u32, val_addr :: u32-addr-out)
+
   test "add_two_32" do
     7 = add_two_32!(3, 4)
   end
@@ -167,5 +170,15 @@ defmodule OtterTest do
   
   test "void_return_type" do
     func_return_type_void!()
+  end
+
+  test "pass argument by address/read only" do
+    assert 1 == pass_by_addr_read_only!(1)
+  end
+
+  test "pass argument by address/read write" do
+    {return_val, out_values} = pass_by_addr_read_write!(1)
+    assert 1 == return_val
+    assert [2] = out_values
   end
 end

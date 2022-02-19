@@ -280,10 +280,20 @@ public:
     std::vector<std::shared_ptr<ffi_type>> field_types;
 };
 
+enum arg_passing_type {
+    VALUE,
+    ADDR,
+    REF,
+};
+
 class arg_type {
 public:
     arg_type(ERL_NIF_TERM term_, ERL_NIF_TERM type_term_, const std::string type_, uint64_t size_, ERL_NIF_TERM info) :
         term(term_), type_term(type_term_), type(type_), size(size_), extra_info(info) {
+        pass_by = VALUE;
+        is_out = false;
+        value_slot = 0;
+        value_slot_original = 0;
     }
 
     ERL_NIF_TERM term;
@@ -297,6 +307,18 @@ public:
 
     // ffi type
     std::shared_ptr<ffi_type> ffi_arg_type;
+    std::shared_ptr<ffi_type> ffi_arg_type_original;
+
+    size_t value_slot;
+    size_t value_slot_original;
+
+    // if pass_by == VALUE or pass_by == REF
+    //  then we have ffi_arg_type == ffi_arg_type_original
+    // if pass_by == ADDR
+    //  then ffi_arg_type_original will record the original type
+    //       and ffi_arg_type will be the corresponding pointer type
+    arg_passing_type pass_by;
+    bool is_out;
 };
 
 static void * null_ptr_g = nullptr;
@@ -347,6 +369,19 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                     }
                     args_with_type.emplace_back(arg_value, type_term, arg_type_str, size, arg_type_info);
                     auto &arg_with_type = args_with_type[args_with_type.size() - 1];
+
+                    bool pass_by_addr = false;
+                    ERL_NIF_TERM addr_term;
+                    if (enif_get_map_value(env, arg_type_info, enif_make_atom(env, "addr"), &addr_term)) {
+                        arg_with_type.pass_by = ADDR;
+                    }
+
+                    bool is_out = false;
+                    ERL_NIF_TERM out_term;
+                    if (enif_get_map_value(env, arg_type_info, enif_make_atom(env, "out"), &out_term)) {
+                        arg_with_type.is_out = true;
+                    }
+
                     if (arg_with_type.type == "c_ptr") {
                         arg_with_type.ffi_arg_type = std::make_shared<ffi_type>();
                         copy_ffi_type(arg_with_type.ffi_arg_type, ffi_type_pointer);
@@ -385,7 +420,7 @@ static bool get_args_with_type(ErlNifEnv *env, ERL_NIF_TERM arg_types_term, std:
                         copy_ffi_type(arg_with_type.ffi_arg_type, ffi_type_pointer);
                     }
 
-                    if (arg_with_type.size > 1) {
+                    if (arg_with_type.size > 0) {
                         ffi_type ffi_type_array;
                         ffi_type_array.size = arg_with_type.ffi_arg_type->size * arg_with_type.size;
                         ffi_type_array.alignment = arg_with_type.ffi_arg_type->alignment;
@@ -524,6 +559,12 @@ public:
         return true;
     }
 
+    bool get_value(size_t slot, T& value) {
+        if (invalid || slot >= next) return false;
+        value = resources[slot];
+        return true;
+    }
+
     bool set(T val, size_t &occupy) {
         if (invalid) return false;
         if (next == cap) {
@@ -632,6 +673,42 @@ ffi_type * get_default_ffi_type(double) {
     return &ffi_type_double;
 }
 
+template <typename T>
+static bool handle_pass_by_addr(
+    ffi_resources<T> * ffi_arg_res,
+    size_t value_slot,
+    arg_type &p,
+    ffi_type **&args,
+    size_t arg_index,
+    std::map<uint64_t, void *> &ffi_res,
+    std::map<uint64_t, std::map<size_t, size_t>> &type_index_resindex)
+{
+    p.ffi_arg_type_original = p.ffi_arg_type;
+    p.value_slot_original = value_slot;
+
+    if (p.pass_by == ADDR) {
+        args[arg_index] = get_default_ffi_type<void *>();
+        auto ffi_arg_by_addr_res = get_ffi_res<void *>(ffi_res, (uint64_t)(uint64_t *)get_default_ffi_type<void *>(), true);
+        void * res_address = nullptr;
+        if (ffi_arg_res && ffi_arg_by_addr_res &&
+            ffi_arg_res->get(value_slot, res_address) &&
+            ffi_arg_by_addr_res->set(res_address, value_slot)) {
+
+            p.ffi_arg_type = std::make_shared<ffi_type>();
+            copy_ffi_type(p.ffi_arg_type, ffi_type_pointer);
+            p.value_slot = value_slot;
+
+            type_index_resindex[(uint64_t)(uint64_t *)args[arg_index]][arg_index] = value_slot;
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        p.value_slot = value_slot;
+    }
+    return true;
+}
+
 template <typename T, typename ERL_API_T=T, typename get_nif_term_func = int(*)(ErlNifEnv *, ERL_NIF_TERM, ERL_API_T*)>
 static bool handle_arg(
         ErlNifEnv *env,
@@ -649,7 +726,7 @@ static bool handle_arg(
         size_t value_slot = 0;
         if (ffi_arg_res && ffi_arg_res->set((T)value, value_slot)) {
             type_index_resindex[(uint64_t)(uint64_t *)args[arg_index]][arg_index] = value_slot;
-            return true;
+            return handle_pass_by_addr<T>(ffi_arg_res, value_slot, p, args, arg_index, ffi_res, type_index_resindex);
         } else {
             printf("[debug] cannot save value for %s to ffi_arg_res\r\n", p.type.c_str());
             return false;
@@ -710,7 +787,68 @@ static bool handle_c_ptr_arg(
     } else {
         return false;
     }
-    return true;
+    return handle_pass_by_addr<void *>(ffi_arg_res, value_slot, p, args, arg_index, ffi_res, type_index_resindex);
+}
+
+template <typename T, typename ERL_API_T=T, typename make_nif_term_func = ERL_NIF_TERM(*)(ErlNifEnv *, ERL_API_T)>
+static bool handle_out_values(
+    ErlNifEnv *env,
+    make_nif_term_func make_term,
+    arg_type &p,
+    std::map<uint64_t, void *> &ffi_res,
+    ERL_NIF_TERM &out_term,
+    std::string &out_error)
+{
+    auto ffi_arg_res = get_ffi_res<T>(ffi_res, (uint64_t)(uint64_t *)get_default_ffi_type<T>(), true);
+    T value;
+    if (ffi_arg_res && ffi_arg_res->get_value(p.value_slot_original, value)) {
+        out_term = make_term(env, value);
+        return true;
+    } else {
+        out_error = "cannot get original argument storage";
+        return false;
+    }
+}
+
+static bool handle_out_values(ErlNifEnv *env, arg_type &p, std::map<uint64_t, void *> &ffi_res, ERL_NIF_TERM &out_term, std::string &out_error) {
+    bool ok = false;
+    out_error = "not implemented for type " + p.type;
+    if (p.type == "c_ptr") {
+        // need to handle pointers with care
+        // copy data, but how many bytes should we copy?
+    } else if (p.type == "s8") {
+        ok = handle_out_values<int8_t, int32_t>(env, enif_make_int, p, ffi_res, out_term, out_error);
+    } else if (p.type == "s16") {
+        ok = handle_out_values<int16_t, int32_t>(env, enif_make_int, p, ffi_res, out_term, out_error);
+    } else if (p.type == "s32") {
+        ok = handle_out_values<int32_t, int32_t>(env, enif_make_int, p, ffi_res, out_term, out_error);
+    } else if (p.type == "s64") {
+        ok = handle_out_values<int64_t, int64_t>(env, enif_make_long, p, ffi_res, out_term, out_error);
+    } else if (p.type == "u8") {
+        ok = handle_out_values<uint8_t, uint32_t>(env, enif_make_uint, p, ffi_res, out_term, out_error);
+    } else if (p.type == "u16") {
+        ok = handle_out_values<uint16_t, uint32_t>(env, enif_make_uint, p, ffi_res, out_term, out_error);
+    } else if (p.type == "u32") {
+        ok = handle_out_values<uint32_t, uint32_t>(env, enif_make_uint, p, ffi_res, out_term, out_error);
+    } else if (p.type == "u64") {
+        ok = handle_out_values<uint64_t, uint64_t>(env, enif_make_ulong, p, ffi_res, out_term, out_error);
+    } else if (p.type == "f32") {
+        ok = handle_out_values<float, double>(env, enif_make_double, p, ffi_res, out_term, out_error);
+    } else if (p.type == "f64") {
+        ok = handle_out_values<double, double>(env, enif_make_double, p, ffi_res, out_term, out_error);
+    } else if (p.type == "va_args") {
+        // todo: handle va_args
+    } else {
+        bool is_struct = false;
+        if (is_struct) {
+            // todo: struct
+        } else {
+            // todo: other types
+            printf("[debug] type: %s\r\n", p.type.c_str());
+        }
+        ok = false;
+    }
+    return ok;
 }
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
@@ -743,6 +881,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         void *symbol = symbol_res->val;
         if (symbol != nullptr) {
             ffi_cif cif;
+            std::vector<size_t> out_value_indexes;
 
             ffi_type ** args = nullptr;
             void **values = nullptr;
@@ -792,6 +931,10 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 }
                 arg_failed = i;
                 auto &p = args_with_type[i];
+                if (p.is_out) {
+                    out_value_indexes.push_back(i);
+                }
+
                 if (p.type == "c_ptr") {
                     if (!(ready = handle_c_ptr_arg(env, erlang::nif::get_sint64, p, args, i, ffi_res, type_index_resindex))) {
                         break;
@@ -889,6 +1032,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 if (args == nullptr || args[i] == nullptr) {
                     ready = 0;
                     error_msg = "input argument type missing for arg at index " + std::to_string(i);
+                    break;
                 }
             }
 
@@ -898,7 +1042,18 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
             }
 
             ERL_NIF_TERM ret;
-            if (ready && ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args) == FFI_OK) {
+            ffi_status prep_status;
+            if (ready) {
+                prep_status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args_with_type.size(), ffi_return_type, args);
+                if (prep_status != FFI_OK) {
+                    ready = 0;
+                    // overwrite previous error message if there wasn't one
+                    error_msg = "ffi_prep_cif failed";
+                }
+            }
+
+            ERL_NIF_TERM out_list;
+            if (ready) {
                 // size here gets updated by ffi_prep_cif
                 return_object_size = ffi_return_type->size;
                 if (return_object_size > 0) {
@@ -1008,7 +1163,22 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                     if (ready) {
                         ffi_call(&cif, (void (*)())symbol, rc, values);
                     }
-                    
+
+                    // has out values, copy them to erlang
+                    if (out_value_indexes.size() > 0) {
+                        std::vector<ERL_NIF_TERM> out_terms;
+                        for (auto &index : out_value_indexes) {
+                            auto &p = args_with_type[index];
+                            ERL_NIF_TERM out;
+                            std::string out_error;
+                            if (!handle_out_values(env, p, ffi_res, out, out_error)) {
+                                out = erlang::nif::error(env, out_error.c_str());
+                            }
+                            out_terms.push_back(out);
+                        }
+                        out_list = enif_make_list_from_array(env, (const ERL_NIF_TERM *)out_terms.data(), (unsigned)out_value_indexes.size());
+                    }
+
                     // clean up everything used as input arguments for ffi_call
                     free_ffi_res<void *>(ffi_res, (uint64_t)(uint64_t *)&ffi_type_pointer);
                     free_ffi_res<uint8_t>(ffi_res, (uint64_t)(uint64_t *)&ffi_type_uint8);
@@ -1037,11 +1207,6 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                         free((void *)values);
                         values = nullptr;
                     }
-                }
-            } else {
-                // overwrite previous error message if there wasn't one
-                if (!error_msg.empty()) {
-                    error_msg = "ffi_prep_cif failed";
                 }
             }
 
@@ -1101,7 +1266,12 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
                 free(rc);
                 rc = nullptr;
             }
-            return erlang::nif::ok(env, ret);
+
+            if (out_value_indexes.size() > 0) {
+                return erlang::nif::ok(env, enif_make_tuple2(env, ret, out_list));
+            } else {
+                return erlang::nif::ok(env, ret);
+            }
         } else {
             return erlang::nif::error(env, "resource has an invalid handle");
         }
