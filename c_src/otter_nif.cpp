@@ -1,7 +1,7 @@
 #include "nif_utils.hpp"
 #include <dlfcn.h>
 #include <erl_nif.h>
-#include <ffi/ffi.h>
+#include <ffi.h>
 #include <iostream>
 #include <mutex>
 #include <memory>
@@ -124,60 +124,59 @@ static ERL_NIF_TERM otter_dlclose(ErlNifEnv *env, int argc, const ERL_NIF_TERM a
     }
 }
 
-static ERL_NIF_TERM otter_dlsym(ErlNifEnv *env, int argc,
-                                const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
-      return enif_make_badarg(env);
-  }
-
-  OtterHandle *res = nullptr;
-  std::string func_name;
-  if (enif_get_resource(env, argv[0], OtterHandle::type, (void **)&res) &&
-      erlang::nif::get(env, argv[1], func_name) && res && !func_name.empty()) {
-    void *handle = res->val;
-    if (handle != nullptr) {
-      OtterHandle *opened_res = nullptr;
-      for (auto it = opened_handles.begin(); it != opened_handles.end(); ++it) {
-        if (it->second->val == handle) {
-          opened_res = it->second;
-          break;
-        }
-      }
-
-      if (opened_res == nullptr) {
-        opened_res = res;
-      }
-
-      OtterSymbol *symbol = nullptr;
-      if (found_symbols.find(opened_res) != found_symbols.end()) {
-        auto &symbols = found_symbols[opened_res];
-        if (symbols.find(func_name) != symbols.end()) {
-          symbol = symbols[func_name];
-        }
-      }
-
-      if (symbol == nullptr) {
-        if (alloc_resource(&symbol)) {
-          void *symbol_dl = dlsym(handle, func_name.c_str());
-          if (symbol_dl == nullptr) {
-            return erlang::nif::error(env, dlerror());
-          }
-          symbol->val = symbol_dl;
-        } else {
-          return erlang::nif::error(env, "cannot allocate memory for resource");
-        }
-      }
-
-      found_symbols[opened_res][func_name] = symbol;
-      ERL_NIF_TERM ret = enif_make_resource(env, symbol);
-
-      return erlang::nif::ok(env, ret);
-    } else {
-      return erlang::nif::error(env, "resource has an invalid image handle");
+static ERL_NIF_TERM otter_dlsym(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 2) {
+        return enif_make_badarg(env);
     }
-  } else {
-    return erlang::nif::error(env, "cannot get image handle");
-  }
+
+    OtterHandle *res = nullptr;
+    std::string func_name;
+    if (enif_get_resource(env, argv[0], OtterHandle::type, (void **)&res) &&
+        erlang::nif::get(env, argv[1], func_name) && res && !func_name.empty()) {
+        void *handle = res->val;
+        if (handle != nullptr) {
+            OtterHandle *opened_res = nullptr;
+            for (auto it = opened_handles.begin(); it != opened_handles.end(); ++it) {
+                if (it->second->val == handle) {
+                    opened_res = it->second;
+                    break;
+                }
+            }
+
+            if (opened_res == nullptr) {
+                opened_res = res;
+            }
+
+            OtterSymbol *symbol = nullptr;
+            if (found_symbols.find(opened_res) != found_symbols.end()) {
+                auto &symbols = found_symbols[opened_res];
+                if (symbols.find(func_name) != symbols.end()) {
+                    symbol = symbols[func_name];
+                }
+            }
+
+            if (symbol == nullptr) {
+                if (alloc_resource(&symbol)) {
+                    void *symbol_dl = dlsym(handle, func_name.c_str());
+                    if (symbol_dl == nullptr) {
+                        return erlang::nif::error(env, dlerror());
+                    }
+                    symbol->val = symbol_dl;
+                } else {
+                    return erlang::nif::error(env, "cannot allocate memory for resource");
+                }
+            }
+
+            found_symbols[opened_res][func_name] = symbol;
+            ERL_NIF_TERM ret = enif_make_resource(env, symbol);
+
+            return erlang::nif::ok(env, ret);
+        } else {
+            return erlang::nif::error(env, "resource has an invalid image handle");
+        }
+    } else {
+      return erlang::nif::error(env, "cannot get image handle");
+    }
 }
 
 static std::map<std::string, ffi_type *> str2ffi_type = {
