@@ -52,10 +52,10 @@ struct s_uints create_s_uints() {
 
 uint32_t receive_s_uints(struct s_uints t) {
     return (
-        t.u8 == 'b' &&
-        t.u16 == 65535 &&
-        t.u32 == 0xdeadbeef &&
-        t.u64 == 0xfeedfacedeadbeef
+            t.u8 == 'b' &&
+            t.u16 == 65535 &&
+            t.u32 == 0xdeadbeef &&
+            t.u64 == 0xfeedfacedeadbeef
     );
 }
 
@@ -74,14 +74,14 @@ struct complex create_complex() {
 
 uint32_t receive_complex(struct complex t) {
     return (
-        t.c1 == 'c' &&
-        t.c2 == 'd' &&
-        t.c3[0] == 'e' &&
-        t.c3[1] == 'f' &&
-        t.c3[2] == 'g' &&
-        t.foo.u16 == 32768 &&
-        t.bar.u8 == 'i' &&
-        t.bar.u16 == 49152
+            t.c1 == 'c' &&
+            t.c2 == 'd' &&
+            t.c3[0] == 'e' &&
+            t.c3[1] == 'f' &&
+            t.c3[2] == 'g' &&
+            t.foo.u16 == 32768 &&
+            t.bar.u8 == 'i' &&
+            t.bar.u16 == 49152
     );
 }
 
@@ -149,8 +149,9 @@ double pass_through_f64(double val) {
     return val;
 }
 
-uint64_t pass_through_c_ptr(void * ptr) {
-    return (uint64_t)(uint64_t *)ptr;
+uint64_t pass_through_c_ptr(void *ptr) {
+    return (uint64_t)(uint64_t * )
+    ptr;
 }
 
 uint64_t multiply_in_test(uint32_t a, uint32_t b) {
@@ -174,7 +175,25 @@ uint64_t pass_func_ptr(uint32_t a, uint32_t b, uint64_t(*op)(uint32_t, uint32_t)
 }
 
 void func_return_type_void() {
-    
+
+}
+
+uint32_t pass_by_addr_read_only(uint32_t *val_addr) {
+    if (val_addr) {
+        return *val_addr;
+    } else {
+        return 0;
+    }
+}
+
+uint32_t pass_by_addr_read_write(uint32_t *val_addr) {
+    if (val_addr) {
+        uint32_t in_value = *val_addr;
+        *val_addr = in_value + 1;
+        return in_value;
+    } else {
+        return 0;
+    }
 }
 
 }
