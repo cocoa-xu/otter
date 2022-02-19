@@ -20,6 +20,11 @@ sudo apt update
 sudo apt install libffi-dev
 ```
 
+## Todo
+- [ ] Support variadic function (WIP)
+- [ ] Create struct instances using [c_struct](https://github.com/cocoa-xu/c_struct). Maybe merge code in `c_struct` to
+here?
+
 ## Demo
 ```elixir
 defmodule Ctypes do
