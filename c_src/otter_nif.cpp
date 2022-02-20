@@ -51,6 +51,8 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 // ffi_type.elements to an array [null_ptr_g]
 static const void * null_ptr_g = nullptr;
 
+static void resource_dtor(ErlNifEnv *env, void *) {}
+
 // Helper function for FFIResource
 template <typename T>
 static ffi_type * get_default_ffi_type(T val=0) {
@@ -155,7 +157,7 @@ public:
     // identified by struct_id.
     static ErlNifResourceType * register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
         auto resource_type = enif_open_resource_type(
-          env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), NULL,
+          env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
           ERL_NIF_RT_CREATE, nullptr);
         return resource_type;
     }
@@ -851,12 +853,6 @@ public:
 
         size_t total_size = args_with_type_.size();
         for (size_t i = arg_offset; i < total_size; ++i) {
-            if (args == nullptr) {
-                error_msg = "cannot allocate memory for ffi args";
-                ok = false;
-                break;
-            }
-
             if (last_is_va_args) {
                 error_msg = "va_args can only appear at the end of the input argument list";
                 ok = false;
@@ -1049,6 +1045,7 @@ public:
         //   {value, %{type: TYPE, extra: EXTRA}}
 
         // call pop_back because the last one is :va_args
+        std::shared_ptr<FFIArgType> this_va_args = va_args;
         args_with_type_.pop_back();
         if (_get_args_with_type(va_args->term, va_arg_index, args_with_type_, error_msg)) {
             size_t total_args = args_with_type_.size();
@@ -1060,6 +1057,7 @@ public:
             args = (ffi_type **)new_args;
 
             size_t num_var_args = 0;
+
             return _process_args_with_type(num_var_args, va_arg_index, error_msg, false);
         } else {
             error_msg = "failed to parse argument types in va_args";
@@ -1464,7 +1462,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
 static int on_load(ErlNifEnv *env, void **, ERL_NIF_TERM) {
     ErlNifResourceType *rt;
-    rt = enif_open_resource_type(env, "Elixir.Otter.Nif", "OtterHandle", NULL, ERL_NIF_RT_CREATE, NULL);
+    rt = enif_open_resource_type(env, "Elixir.Otter.Nif", "OtterHandle", resource_dtor, ERL_NIF_RT_CREATE, nullptr);
     if (!rt) {
         return -1;
     }
