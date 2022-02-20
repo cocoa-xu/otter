@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdarg>
 
 using namespace std;
 
@@ -194,6 +195,20 @@ uint32_t pass_by_addr_read_write(uint32_t *val_addr) {
     } else {
         return 0;
     }
+}
+
+uint64_t variadic_func_pass_by_values(uint32_t n, ...) {
+    uint64_t sum = 0;
+    va_list ptr;
+    va_start(ptr, n);
+
+    for (size_t i = 0; i < n; i++) {
+        sum += va_arg(ptr, uint32_t);
+    }
+
+    va_end(ptr);
+
+    return sum;
 }
 
 }
