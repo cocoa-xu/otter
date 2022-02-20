@@ -967,7 +967,7 @@ public:
 
         if (!ok) {
             if (error_msg.empty()) {
-                error_msg = "failed to process arg[" + std::to_string(arg_failed) + "], type: " + p->type;
+                error_msg = "failed to process argument at index " + std::to_string(arg_failed);
             }
         }
         return ok;
