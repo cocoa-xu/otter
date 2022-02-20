@@ -21,12 +21,13 @@ defmodule CtypesDemo do
 
   # or using module level default shared library name and load mode
   extern puts(:s32, c_ptr)
-  extern printf(:s32, c_ptr)
-  extern printf(:s32, c_ptr, va_args)
   extern dlopen(:c_ptr, c_ptr, s32)
   extern dlsym(:c_ptr, c_ptr, c_ptr)
 
   # explict mark argument name and type
   extern cos(:f64, theta :: f64)
   extern tan(:f64, theta :: f64)
+
+  # also support functions with variadic arguments
+  extern printf(:u64, fmt :: c_ptr, args :: va_args)
 end

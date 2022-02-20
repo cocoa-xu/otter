@@ -21,7 +21,6 @@ sudo apt install libffi-dev
 ```
 
 ## Todo
-- [ ] Support variadic function (WIP)
 - [ ] Create struct instances using [c_struct](https://github.com/cocoa-xu/c_struct). Maybe merge code in `c_struct` to
 here?
 
@@ -50,13 +49,14 @@ defmodule Ctypes do
 
   # or using module level default shared library name and load mode
   extern puts(:s32, c_ptr)
-  extern printf(:s32, c_ptr)
-  extern printf(:s32, c_ptr, va_args)
   extern dlopen(:c_ptr, c_ptr, s32)
   extern dlsym(:c_ptr, c_ptr, c_ptr)
 
   # explict mark argument name and type
   extern cos(:f64, theta :: f64)
+  
+  # also support functions with variadic arguments
+  extern printf(:u64, fmt :: c_ptr, args :: va_args)
 end
 
 # one extern will define two function, 
@@ -80,6 +80,14 @@ iex> CtypesDemo.cos!(0)
 1.0
 iex> CtypesDemo.cos!(0.0)
 1.0
+iex> CtypesDemo.printf!("%s-%.5lf-0x%08x-%c\r\n\0", [
+...>   as_type!("hello world!\0", :c_ptr),
+...>   as_type!(123.456789, :f64),
+...>   as_type!(0xdeadbeef, :u32),
+...>   as_type!(65, :u8)
+...> ])
+hello world!-123.45679-0xdeadbeef-A
+37
 iex> handle = CtypesDemo.dlopen!("/usr/lib/libSystem.B.dylib", 2) # or "libc.so" for Linux
 20152781936
 iex> dlsym_addr = CtypesDemo.dlsym!(handle, "dlsym")
