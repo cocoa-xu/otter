@@ -78,6 +78,11 @@ defmodule OtterTest do
 
   extern variadic_func_pass_by_values(:u64, n :: u32, array :: va_args)
 
+  extern fopen(:u64, path :: c_ptr, mode :: c_ptr)
+  extern fclose(:u32, stream :: c_ptr)
+  extern fscanf(:u64, stream :: c_ptr, fmt :: c_ptr, args :: va_args)
+  extern fprintf(:u64, stream :: c_ptr, fmt :: c_ptr, args :: va_args)
+
   test "add_two_32" do
     7 = add_two_32!(3, 4)
   end
@@ -194,5 +199,45 @@ defmodule OtterTest do
         Otter.as_type!(v, :u32)
       end)
     ^sum = variadic_func_pass_by_values!(n, val)
+  end
+
+  test "fprintf" do
+    # remove output file if exists
+    test_file_path = Path.join([__DIR__, "test_fprintf.txt"])
+    File.rm_rf!(test_file_path)
+
+    # ensure NULL-terminated string
+    test_stream = fopen!(test_file_path <> "\0", "w\0")
+    assert test_stream != 0
+    fprintf!(test_stream, "%s-%.5lf-0x%08x-%c\r\n\0", [
+      as_type!("hello world!\0", :c_ptr),
+      as_type!(123.456789, :f64),
+      as_type!(0xdeadbeef, :u32),
+      as_type!(65, :u8)
+    ])
+    fclose!(test_stream)
+    "hello world!-123.45679-0xdeadbeef-A\r\n" = File.read!(test_file_path)
+    File.rm_rf!(test_file_path)
+  end
+
+  test "variadic args out" do
+    # prepare test file
+    u32_val = 42
+    f64_val = 42.42424242
+    test_file_path = Path.join([__DIR__, "test_fscanf.txt"])
+    :ok = File.write!(test_file_path, "#{u32_val} #{f64_val}\r\n")
+
+    # ensure NULL-terminated string
+    test_stream = fopen!(test_file_path <> "\0", "r\0")
+    # test for NULL
+    assert test_stream != 0
+    {return_val, out_vals} =
+      fscanf!(test_stream, "%d %lf\0", [
+        as_type!(0, :u32) |> pass_by!(:addr, :out),
+        as_type!(0, :f64) |> pass_by!(:addr, :out),
+      ])
+    fclose!(test_stream)
+    {2, [^u32_val, ^f64_val]} = {return_val, out_vals}
+    File.rm_rf!(test_file_path)
   end
 end
