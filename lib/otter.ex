@@ -198,6 +198,10 @@ defmodule Otter do
     va_args_only_at_the_end(arg_types)
   end
 
+  @doc """
+  `as_type/2` is used for generate typed arguments that pass to
+  a variadic function
+  """
   def as_type(value, :c_ptr) when is_binary(value) do
     {:ok, {value, %{type: "c_ptr"}}}
   end
@@ -227,6 +231,9 @@ defmodule Otter do
 
   deferror as_type(value, to_type)
 
+  @doc """
+  Pass by address and marked as an output variable
+  """
   def pass_by({value, types}, :addr, :out) when is_map(types) do
     {:ok, {value,
       Map.update(types, :addr, true, fn _ -> true end)
@@ -235,11 +242,30 @@ defmodule Otter do
     }}
   end
 
+  deferror pass_by(arg, by, out)
+
+  @doc """
+  `Otter.&/1` is the shorthand for `as_type!/2 |> pass_by!/3`
+
+  ## Example
+  ```elixir
+  Otter.&({42, :u32}) == Otter.as_type!(42, :u32) |> Otter.pass_by!(:addr, :out)
+  ```
+  """
   def &({value, type}) do
     as_type!(value, type)
     |> pass_by!(:addr, :out)
   end
 
+  @doc """
+  Specifies how a variable is passed to a function
+
+  - `arg`. A 2-tuple `{arg_value, type_info_map}`
+  - `by`
+    - `:addr`. Pass by address, i.e, `&value` in C.
+    - `:value`. Pass by value.
+    - `:ref`. Pass by reference. (WIP)
+  """
   def pass_by({value, types}, :addr) when is_map(types) do
     {:ok, {value,
       Map.update(types, :addr, true, fn _ -> true end)
@@ -266,7 +292,6 @@ defmodule Otter do
   end
 
   deferror pass_by(arg, by)
-  deferror pass_by(arg, by, out)
 
   defmacro extern(fun) do
     {name, args} = Macro.decompose_call(fun)
