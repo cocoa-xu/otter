@@ -122,6 +122,33 @@ defmodule Otter do
 
   deferror invoke(symbol, return_type, args_with_type)
 
+  @doc """
+  Return the address of stdin FILE stream
+  """
+  def stdin do
+    Otter.Nif.stdin()
+  end
+
+  deferror stdin
+
+  @doc """
+  Return the address of stdout FILE stream
+  """
+  def stdout do
+    Otter.Nif.stdout()
+  end
+
+  deferror stdout
+
+  @doc """
+  Return the address of stderr FILE stream
+  """
+  def stderr do
+    Otter.Nif.stderr()
+  end
+
+  deferror stderr
+
   defp get_unique_arg_name(arg_name, index) do
     arg_name
     |> Atom.to_string()
@@ -171,6 +198,10 @@ defmodule Otter do
     va_args_only_at_the_end(arg_types)
   end
 
+  def as_type(value, :c_ptr) when is_binary(value) do
+    {:ok, {value, %{type: "c_ptr"}}}
+  end
+
   def as_type(value, int_type) when is_number(value) and
     (int_type == :u8 or int_type == :u16 or int_type == :u32 or int_type == :u64 or
      int_type == :s8 or int_type == :s16 or int_type == :s32 or int_type == :s64) do
@@ -178,7 +209,7 @@ defmodule Otter do
   end
 
   def as_type(value, fp_type) when is_number(value) and (fp_type == :f32 or fp_type == :f64) do
-    {:ok, {trunc(value), %{type: Atom.to_string(fp_type)}}}
+    {:ok, {value, %{type: Atom.to_string(fp_type)}}}
   end
 
   def as_type({value, types}, to_type) when is_map(types) do

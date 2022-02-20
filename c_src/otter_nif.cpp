@@ -6,6 +6,7 @@
 #include <mutex>
 #include <memory>
 #include <stdlib.h>
+#include <stdio.h>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -1423,7 +1424,19 @@ static ERL_NIF_TERM otter_address_to_symbol(ErlNifEnv *env, int argc,
 }
 
 static ERL_NIF_TERM otter_erl_nif_env(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)(*(uint64_t *)env)));
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)env)));
+}
+
+static ERL_NIF_TERM otter_stdin(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)stdin)));
+}
+
+static ERL_NIF_TERM otter_stdout(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)stdout)));
+}
+
+static ERL_NIF_TERM otter_stderr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+    return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)stderr)));
 }
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1470,6 +1483,9 @@ static ErlNifFunc nif_functions[] = {
     {"symbol_to_address", 1, otter_symbol_to_address, 0},
     {"address_to_symbol", 1, otter_address_to_symbol, 0},
     {"erl_nif_env", 0, otter_erl_nif_env, 0},
+    {"stdin", 0, otter_stdin, 0},
+    {"stdout", 0, otter_stdout, 0},
+    {"stderr", 0, otter_stderr, 0},
     {"invoke", 3, otter_invoke, 0},
 };
 
