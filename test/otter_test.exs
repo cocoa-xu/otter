@@ -1,7 +1,7 @@
 defmodule OtterTest do
   use ExUnit.Case
   doctest Otter
-  import Otter
+  import Otter, except: [{:&, 1}]
 
   @default_from Path.join([__DIR__, "test.so"])
   @default_mode :RTLD_NOW
@@ -233,7 +233,8 @@ defmodule OtterTest do
     assert test_stream != 0
     {return_val, out_vals} =
       fscanf!(test_stream, "%d %lf\0", [
-        as_type!(0, :u32) |> pass_by!(:addr, :out),
+        # & is the shorthand for as_type!(0, :u32) |> pass_by!(:addr, :out),
+        Otter.&({0, :u32}),
         as_type!(0, :f64) |> pass_by!(:addr, :out),
       ])
     fclose!(test_stream)

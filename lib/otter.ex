@@ -129,7 +129,7 @@ defmodule Otter do
     Otter.Nif.stdin()
   end
 
-  deferror stdin
+  deferror stdin()
 
   @doc """
   Return the address of stdout FILE stream
@@ -138,7 +138,7 @@ defmodule Otter do
     Otter.Nif.stdout()
   end
 
-  deferror stdout
+  deferror stdout()
 
   @doc """
   Return the address of stderr FILE stream
@@ -147,7 +147,7 @@ defmodule Otter do
     Otter.Nif.stderr()
   end
 
-  deferror stderr
+  deferror stderr()
 
   defp get_unique_arg_name(arg_name, index) do
     arg_name
@@ -233,6 +233,11 @@ defmodule Otter do
       |> Map.update(:out, true, fn _ -> true end)
       |> Map.pop(:ref) |> elem(1)
     }}
+  end
+
+  def &({value, type}) do
+    as_type!(value, type)
+    |> pass_by!(:addr, :out)
   end
 
   def pass_by({value, types}, :addr) when is_map(types) do
