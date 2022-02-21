@@ -20,9 +20,56 @@ sudo apt update
 sudo apt install libffi-dev
 ```
 
+## Type Correspondences
+### Function return type
+| Syntax         | Example In C | Example in Otter | Description                                                                                         |
+|----------------|--------------|------------------|-----------------------------------------------------------------------------------------------------|
+| :return_type   | uint32_t     | :u32             | unsigned 32-bit integer. Return type should be the atom version of the basic types available below. |
+
+### Basic types
+
+| Syntax         | Example In C | Example in Otter | Description              |
+|----------------|--------------|------------------|--------------------------|
+| s8             | int8_t       | s8               | signed 8-bit integer.    |
+| s16            | int16_t      | s16              | signed 16-bit integer.   |
+| s32            | int32_t      | s32              | signed 32-bit integer.   |
+| s64            | int64_t      | s64              | signed 64-bit integer.   |
+| u8             | uint8_t      | u8               | unsigned 8-bit integer.  |
+| u16            | uint16_t     | u16              | unsigned 16-bit integer. |
+| u32            | uint32_t     | u32              | unsigned 32-bit integer. |
+| u64            | uint64_t     | u64              | unsigned 64-bit integer. |
+| c_ptr          | void *       | c_ptr            | Any C pointer.           |
+
+We'll use `{T}` to indicate any **basic types** from now on. For example, `` `{T}`-size(42) `` could be `u32-size(42)`.
+
+### ND-array types
+| Syntax                  | Example In C      | Example in Otter      | Description                                      |
+|-------------------------|-------------------|-----------------------|--------------------------------------------------|
+| `{T}`-size(d)           | `T [d]`           | `u32-size(42)`        | An array of `42` unsigned 32-bit integers.       |
+| `{T}`-size(d1, d2, ...) | `T [d1][d2][...]` | `u8-size(100, 200)`   | An array of `100 x 200` unsigned 8-bit integers. |
+
+We'll use `{NDA}` to indicate any ND-array types from now on.
+
+### Struct types
+To declare C structs, we'll have to use the `cstruct` macro. 
+
+We'll use `{FT}` to indicate the type of a field in the struct.
+
+```shell
+{FT} = {T}
+       | {NDA}
+```
+
+Say you have a struct named `name`,
+
+| Syntax                                       | Example In C                            | Example in Otter                    | Description                                                        |
+|----------------------------------------------|-----------------------------------------|-------------------------------------|--------------------------------------------------------------------|
+| cstruct(name(field_name :: `{FT}`))          | `struct name { FT field_name; }`        | `cstruct(name(val :: u32))`         | A struct with a single field named `val` which type is `u32`       |
+| cstruct(name(field_name_1 :: `{FT1}`, ...))  | `struct name { FT1 field_name_1; ... }` | `cstruct(name(x :: f32, y :: f32))` | A struct with fields `x` and `y` and they have the same type `f32` |
+
 ## Todo
 - [ ] Create struct instances using [c_struct](https://github.com/cocoa-xu/c_struct). Maybe merge code in `c_struct` to
-here?
+  here?
 
 ## Demo
 ```elixir
