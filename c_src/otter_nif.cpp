@@ -1,12 +1,19 @@
-#include "nif_utils.hpp"
 #include <dlfcn.h>
+#ifdef OTTER_WRAP_SIGSEGV
+#  include <setjmp.h>
+#  include <signal.h>
+#endif
+#include <stdlib.h>
+#include <stdio.h>
+
 #include <erl_nif.h>
 #include <ffi.h>
+
 #include <iostream>
 #include <mutex>
 #include <memory>
-#include <stdlib.h>
-#include <stdio.h>
+
+#include "nif_utils.hpp"
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -50,6 +57,9 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 // global nullptr so that we can directly set
 // ffi_type.elements to an array [null_ptr_g]
 static const void * null_ptr_g = nullptr;
+#ifdef OTTER_WRAP_SIGSEGV
+static thread_local jmp_buf jmp_buf_g;
+#endif
 
 static void resource_dtor(ErlNifEnv *env, void *) {}
 
@@ -1442,6 +1452,17 @@ static ERL_NIF_TERM otter_stderr(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)stderr)));
 }
 
+#ifdef OTTER_WRAP_SIGSEGV
+static void otter_segfault_catcher(int sig) {
+    switch(sig) {
+        case SIGSEGV:
+            printf("\r\nSegmentation fault signal caught! Attempting recovery...\r\n");
+            longjmp(jmp_buf_g, 1);
+            break;
+    }
+}
+#endif
+
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) {
         return enif_make_badarg(env);
@@ -1452,17 +1473,32 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
     std::string error_msg;
     ERL_NIF_TERM return_value, out_values;
+    ERL_NIF_TERM ret;
 
-    auto ffi_call_wrapper = std::make_shared<FFICall>(env, symbol_term, return_type_term, args_with_type_term);
-    if (ffi_call_wrapper->call(return_value, out_values, error_msg)) {
-        if (ffi_call_wrapper->out_value_indexes.size() > 0) {
-            return erlang::nif::ok(env, enif_make_tuple2(env, return_value, out_values));
+#ifdef OTTER_WRAP_SIGSEGV
+    struct sigaction oldact;
+    sigaction(SIGINT, NULL, &oldact);
+
+    signal(SIGSEGV, otter_segfault_catcher);
+    if (!setjmp(jmp_buf_g)) {
+#endif
+        auto ffi_call_wrapper = std::make_shared<FFICall>(env, symbol_term, return_type_term, args_with_type_term);
+        if (ffi_call_wrapper->call(return_value, out_values, error_msg)) {
+            if (ffi_call_wrapper->out_value_indexes.size() > 0) {
+                ret = erlang::nif::ok(env, enif_make_tuple2(env, return_value, out_values));
+            } else {
+                ret =  erlang::nif::ok(env, return_value);
+            }
         } else {
-            return erlang::nif::ok(env, return_value);
+            ret =  erlang::nif::error(env, error_msg.c_str());
         }
+#ifdef OTTER_WRAP_SIGSEGV
     } else {
-        return erlang::nif::error(env, error_msg.c_str());
+        ret =  erlang::nif::error(env, "segmentation fault");
     }
+    signal(SIGSEGV, oldact.sa_handler);
+#endif
+    return ret;
 }
 
 static int on_load(ErlNifEnv *env, void **, ERL_NIF_TERM) {

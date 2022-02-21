@@ -174,7 +174,7 @@ defmodule OtterTest do
     66 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(add))
     18 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(subtract))
   end
-  
+
   test "void_return_type" do
     func_return_type_void!()
   end
@@ -240,5 +240,11 @@ defmodule OtterTest do
     fclose!(test_stream)
     {2, [^u32_val, ^f64_val]} = {return_val, out_vals}
     File.rm_rf!(test_file_path)
+  end
+
+  test "recover from segmentation fault" do
+    # note that this needs OTTER_WRAP_SIGSEGV to be defined when compiling Otter NIF
+    # pass a NULL function pointer
+    {:error, "segmentation fault"} = pass_func_ptr(42, 24, 0)
   end
 end
