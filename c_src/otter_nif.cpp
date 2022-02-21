@@ -1456,7 +1456,6 @@ static ERL_NIF_TERM otter_stderr(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 static void otter_segfault_catcher(int sig) {
     switch(sig) {
         case SIGSEGV:
-            printf("\r\nSegmentation fault signal caught! Attempting recovery...\r\n");
             longjmp(jmp_buf_g, 1);
             break;
     }
