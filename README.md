@@ -21,6 +21,26 @@ sudo apt install libffi-dev
 ```
 
 ## Type Correspondences
+Generally, we can extern a function using the following syntax
+
+```elixir
+extern func_name(:return_type)
+extern func_name(:return_type, arg_type, ...)
+extern func_name(:return_type, arg_name :: arg_type, ...)
+```
+
+Note that `arg_name` is optional, which means rule 2 and 3 can be rewritten as
+
+```elixir
+extern func_name(:return_type, [arg_name :: ]arg_type, ...)
+```
+
+and if we want to further simplify (or complify?) it, we have
+
+```elixir
+extern func_name(:return_type[, [arg_name :: ]arg_type, ...])
+```
+
 ### Function return type
 | Syntax         | Example In C | Example in Otter | Description                                                                                         |
 |----------------|--------------|------------------|-----------------------------------------------------------------------------------------------------|
@@ -38,7 +58,28 @@ sudo apt install libffi-dev
 | u16            | uint16_t     | u16              | unsigned 16-bit integer. |
 | u32            | uint32_t     | u32              | unsigned 32-bit integer. |
 | u64            | uint64_t     | u64              | unsigned 64-bit integer. |
+| f32            | float        | f32              | 32-bit single-precision floating-point numbers. |
+| f64            | double       | f64              | 64-bit double-precision floating-point numbers. |
 | c_ptr          | void *       | c_ptr            | Any C pointer.           |
+
+```elixir
+defmodule Foo do
+  import Otter, except: [{:&, 1}]
+
+  # see their implementations in test/test.cpp
+  extern pass_through_u8(:u8, val :: u8)
+  extern pass_through_u16(:u16, val :: u16)
+  extern pass_through_u32(:u32, val :: u32)
+  extern pass_through_u64(:u64, val :: u64)
+  extern pass_through_s8(:s8, val :: s8)
+  extern pass_through_s16(:s16, val :: s16)
+  extern pass_through_s32(:s32, val :: s32)
+  extern pass_through_s64(:s64, val :: s64)
+  extern pass_through_f32(:f32, val :: f32)
+  extern pass_through_f64(:f64, val :: f64)
+  extern pass_through_c_ptr(:u64, ptr :: c_ptr)
+end
+```
 
 We'll use `{T}` to indicate any **basic types** from now on. For example, `{T}-size(42)` could be `u32-size(42)`.
 
@@ -47,6 +88,8 @@ We'll use `{T}` to indicate any **basic types** from now on. For example, `{T}-s
 |-----------------------|-------------------|---------------------|--------------------------------------------------|
 | {T}-size(d)           | `T [d]`           | u32-size(42)        | An array of 42 unsigned 32-bit integers.       |
 | {T}-size(d1, d2, ...) | `T [d1][d2][...]` | u8-size(100, 200)   | An array of 100-by-200 unsigned 8-bit integers. |
+
+ND-array is not supported as a function argument yet. It can be only used in structs (see below) for now.
 
 We'll use `{NDA}` to indicate any ND-array types from now on.
 
@@ -74,7 +117,7 @@ Say you have a struct named `name`,
 ## Demo
 ```elixir
 defmodule Ctypes do
-  import Otter
+  import Otter, except: [{:&, 1}]
 
   # module level default shared library name/path
   @default_from (case :os.type() do
