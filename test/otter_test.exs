@@ -174,7 +174,7 @@ defmodule OtterTest do
     66 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(add))
     18 = pass_func_ptr!(42, 24, Otter.symbol_to_address!(subtract))
   end
-  
+
   test "void_return_type" do
     func_return_type_void!()
   end
