@@ -1,8 +1,6 @@
 #include <dlfcn.h>
-#ifdef OTTER_WRAP_SIGSEGV
-#  include <setjmp.h>
-#  include <signal.h>
-#endif
+#include <setjmp.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -57,9 +55,7 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 // global nullptr so that we can directly set
 // ffi_type.elements to an array [null_ptr_g]
 static const void * null_ptr_g = nullptr;
-#ifdef OTTER_WRAP_SIGSEGV
 static thread_local jmp_buf jmp_buf_g;
-#endif
 
 static void resource_dtor(ErlNifEnv *env, void *) {}
 
@@ -1452,7 +1448,6 @@ static ERL_NIF_TERM otter_stderr(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     return erlang::nif::ok(env, enif_make_uint64(env, (uint64_t)((uint64_t *)stderr)));
 }
 
-#ifdef OTTER_WRAP_SIGSEGV
 static void otter_segfault_catcher(int sig) {
     switch(sig) {
         case SIGSEGV:
@@ -1460,7 +1455,6 @@ static void otter_segfault_catcher(int sig) {
             break;
     }
 }
-#endif
 
 static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     if (argc != 3) {
@@ -1474,13 +1468,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     ERL_NIF_TERM return_value, out_values;
     ERL_NIF_TERM ret;
 
-#ifdef OTTER_WRAP_SIGSEGV
     struct sigaction oldact;
-    sigaction(SIGINT, NULL, &oldact);
+    sigaction(SIGSEGV, NULL, &oldact);
 
     signal(SIGSEGV, otter_segfault_catcher);
     if (!setjmp(jmp_buf_g)) {
-#endif
         auto ffi_call_wrapper = std::make_shared<FFICall>(env, symbol_term, return_type_term, args_with_type_term);
         if (ffi_call_wrapper->call(return_value, out_values, error_msg)) {
             if (ffi_call_wrapper->out_value_indexes.size() > 0) {
@@ -1491,12 +1483,11 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
         } else {
             ret =  erlang::nif::error(env, error_msg.c_str());
         }
-#ifdef OTTER_WRAP_SIGSEGV
     } else {
         ret =  erlang::nif::error(env, "segmentation fault");
     }
+
     signal(SIGSEGV, oldact.sa_handler);
-#endif
     return ret;
 }
 
