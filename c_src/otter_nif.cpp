@@ -168,7 +168,7 @@ public:
         return resource_type;
     }
 
-    static ERL_NIF_TERM make_ffi_struct_resource(
+    static bool make_ffi_struct_resource(
         ErlNifEnv *env,
         size_t return_object_size,
         ErlNifResourceType *resource_type,
