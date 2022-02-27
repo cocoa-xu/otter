@@ -61,4 +61,5 @@ jobs:
 
       - name: Run Test Many Times
         run: |
-          bash ci/repeat-run-mix-test.sh
+          bash ci/repeat-run-mix-test.sh || true
+          ls . /core
