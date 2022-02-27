@@ -15,6 +15,10 @@ on:
       - '.github/workflows/macos-*'
   workflow_dispatch:
 
+concurrency:
+  group: build-and-test-linux-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mix_test:
     runs-on: ubuntu-20.04
