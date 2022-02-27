@@ -57,13 +57,8 @@ jobs:
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
-          sudo mix test
+          mix test
 
       - name: Run Test Many Times
         run: |
-          sudo bash ci/repeat-run-mix-test.sh
-
-      - name: Print gdb Stack Trace
-        if: ${{ failure() }}
-        run: |
-          sudo bash -c "cd /cores && bash $PWD/ci/print-core-dump-trace.sh"
+          bash ci/repeat-run-mix-test.sh
