@@ -26,23 +26,29 @@ jobs:
       MIX_ENV: test
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       ImageOS: ubuntu20
+
+    container:
+      image: ubuntu:20.04
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
+
     steps:
       - uses: actions/checkout@v2
-
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: 24.2
-          elixir-version: 1.13.3
 
       - name: Enable Core Dump
         run: |
           ulimit -c
           ulimit -c unlimited
           ulimit -c
+          apt-get update
+          apt-get install -y wget git curl build-essential gcc g++ libffi-dev pkg-config
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 24.2
+          elixir-version: 1.13.3
 
       - name: Compile and Test
         run: |
-          sudo apt update && sudo apt install libffi-dev pkg-config
           mix deps.get
           export CFLAGS="-fsanitize=address -Og -g3 -D OTTER_WRAP_SIGSEGV -fno-omit-frame-pointer"
           export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
