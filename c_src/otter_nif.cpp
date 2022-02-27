@@ -180,6 +180,7 @@ public:
             if (resource) {
                 memcpy(resource, (void *)result, return_object_size);
                 ret = enif_make_resource(env, resource);
+                enif_release_resource(resource);
                 return true;
             } else {
                 return false;

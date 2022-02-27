@@ -70,7 +70,7 @@ defmodule OtterTest do
   extern add_in_test(:u64, a :: u32, b :: u32)
   extern subtract_in_test(:u64, a :: u32, b :: u32)
   extern pass_func_ptr(:u64, a :: u32, b :: u32, op :: c_ptr)
-  
+
   extern func_return_type_void(:void)
 
   extern pass_by_addr_read_only(:u32, val_addr :: u32-addr)
@@ -85,6 +85,12 @@ defmodule OtterTest do
 
   test "add_two_32" do
     7 = add_two_32!(3, 4)
+  end
+
+  test "s_u8_u16_crash" do
+    t = create_s_u8_u16!()
+    {:ok, x} = receive_s_u8_u16(t)
+    IO.inspect(x)
   end
 
   test "s_u8_u16" do
