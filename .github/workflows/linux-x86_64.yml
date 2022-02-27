@@ -62,4 +62,5 @@ jobs:
       - name: Print gdb Stack Trace
         if: ${{ failure() }}
         run: |
+          ls -al
           bash ci/print-core-dump-trace.sh
