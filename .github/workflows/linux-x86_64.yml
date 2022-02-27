@@ -61,11 +61,9 @@ jobs:
 
       - name: Run Test Many Times
         run: |
-          bash ci/repeat-run-mix-test.sh
+          sudo bash ci/repeat-run-mix-test.sh
 
       - name: Print gdb Stack Trace
         if: ${{ failure() }}
         run: |
-          cd /cores
-          ls -al
-          bash ci/print-core-dump-trace.sh
+          sudo bash -c "cd /cores && bash $PWD/ci/print-core-dump-trace.sh"
