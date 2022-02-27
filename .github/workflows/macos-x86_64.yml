@@ -35,3 +35,4 @@ jobs:
         run: |
           mix deps.get
           mix test
+          bash ci/repeat-run-mix-test.sh

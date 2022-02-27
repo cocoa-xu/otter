@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      
+
       - uses: erlef/setup-beam@v1
         with:
           otp-version: 24.2
@@ -48,3 +48,4 @@ jobs:
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
           mix test
+          bash ci/repeat-run-mix-test.sh
