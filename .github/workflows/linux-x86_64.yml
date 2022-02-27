@@ -57,7 +57,7 @@ jobs:
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
-          mix test
+          mix test || ls . /core
 
       - name: Run Test Many Times
         run: |
