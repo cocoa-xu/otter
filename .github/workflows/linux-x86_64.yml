@@ -25,7 +25,9 @@ jobs:
     env:
       MIX_ENV: test
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+    container:
+      image: ubuntu:20.04
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
       - uses: actions/checkout@v2
 
@@ -57,6 +59,7 @@ jobs:
           bash -c "$ELREXEC $CMD_ARGS test" || true
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
+          echo '/tmp/core.%h.%e.%t' > /proc/sys/kernel/core_pattern
           mix test || ls . /core
 
       - name: Run Test Many Times
