@@ -39,8 +39,8 @@ jobs:
           ulimit -c
           ulimit -c unlimited
           ulimit -c
-          apt-get update
-          apt-get install -y wget git curl build-essential gcc g++ libffi-dev pkg-config
+          DEBIAN_FRONTEND=noninteractive apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y wget git curl build-essential gcc g++ libffi-dev pkg-config
 
       - uses: erlef/setup-beam@v1
         with:
