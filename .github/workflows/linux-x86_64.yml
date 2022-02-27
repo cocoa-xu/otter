@@ -30,6 +30,12 @@ jobs:
           otp-version: 24.2
           elixir-version: 1.13.3
 
+      - name: Enable Core Dump
+        run: |
+          ulimit -c
+          ulimit -c unlimited
+          ulimit -c
+
       - name: Compile and Test
         run: |
           sudo apt update && sudo apt install libffi-dev pkg-config
@@ -48,9 +54,11 @@ jobs:
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
           mix test
+
       - name: Run Test Many Times
         run: |
           bash ci/repeat-run-mix-test.sh
+
       - name: Print gdb Stack Trace
         if: ${{ failure() }}
         run: |
