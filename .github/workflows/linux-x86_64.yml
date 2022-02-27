@@ -53,8 +53,7 @@ jobs:
           mix deps.get
           export CFLAGS="-fsanitize=address -Og -g3 -D OTTER_WRAP_SIGSEGV -fno-omit-frame-pointer"
           export CMD="$(ELIXIR_CLI_DRY_RUN=1 mix)"
-          echo ${CMD}
-          export CMD_ARGS="${CMD:3}"
+          export CMD_ARGS="$(echo ${CMD} | cut -c4-)"
           export ERL="$(which erl)"
           export ERL_BASE="$(dirname $(dirname ${ERL}))"
           export ELREXEC="$(find "${ERL_BASE}" -name erlexec)"
