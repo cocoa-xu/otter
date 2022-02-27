@@ -63,4 +63,5 @@ jobs:
         if: ${{ failure() }}
         run: |
           ls -al
+          cd /cores
           bash ci/print-core-dump-trace.sh
