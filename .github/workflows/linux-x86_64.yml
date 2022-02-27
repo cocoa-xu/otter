@@ -52,6 +52,6 @@ jobs:
         run: |
           bash ci/repeat-run-mix-test.sh
       - name: Print gdb Stack Trace
-        if: ${{ failure()
+        if: ${{ failure() }}
         run: |
           bash ci/print-core-dump-trace.sh
