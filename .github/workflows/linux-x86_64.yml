@@ -73,3 +73,13 @@ jobs:
           ls $(pwd)/_build/test/lib/otter/priv
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/_build/test/lib/otter/priv
           gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" $BEAM_SMP /tmp/core.*
+          mkdir -p /tmp/coredumps
+          cp -a /tmp/core.* /tmp/coredumps
+          cp -a $BEAM_SMP /tmp/coredumps
+          cp -a $(pwd)/_build/test/lib/otter/priv/otter_nif.so /tmp/coredumps
+
+      - name: Upload coredumps
+        uses: actions/upload-artifact@v2.2.4
+        with:
+          name: coredumps
+          path: /tmp/coredumps/*
