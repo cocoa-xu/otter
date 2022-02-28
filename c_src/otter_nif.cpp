@@ -163,6 +163,7 @@ public:
         auto resource_type = enif_open_resource_type(
           env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), nullptr,
           ERL_NIF_RT_CREATE, nullptr);
+        printf("[debug] struct: %s, type: %p\r\n", ("OTTER_STRUCT_" + struct_id).data(), resource_type);
         return resource_type;
     }
 
