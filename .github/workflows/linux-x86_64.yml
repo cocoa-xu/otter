@@ -70,4 +70,6 @@ jobs:
           mix test || ls /tmp/core*
           bash ci/repeat-run-mix-test.sh || true
           ls /tmp/core*
+          ls $(pwd)/_build/test/otter/priv
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/_build/test/otter/priv
           gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" $BEAM_SMP /tmp/core.*
