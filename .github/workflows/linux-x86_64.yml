@@ -65,6 +65,7 @@ jobs:
           bash -c "LD_PRELOAD=$(gcc -print-file-name=libasan.so) SKIP_COMPILE=yes $ELREXEC $CMD_ARGS test" || true
           unset CFLAGS
           echo '/tmp/core.%h.%e.%t' > /proc/sys/kernel/core_pattern
+          export CFLAGS="-g -fno-omit-frame-pointer"
           mix test || ls /tmp/core*
           bash ci/repeat-run-mix-test.sh || true
           ls /tmp/core*
