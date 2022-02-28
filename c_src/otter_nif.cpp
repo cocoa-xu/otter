@@ -57,8 +57,6 @@ static std::map<std::string, ffi_type *> str2ffi_type = {
 static const void * null_ptr_g = nullptr;
 static thread_local jmp_buf jmp_buf_g;
 
-static void resource_dtor(ErlNifEnv *env, void *) {}
-
 // Helper function for FFIResource
 template <typename T>
 static ffi_type * get_default_ffi_type(T val=0) {
@@ -163,7 +161,7 @@ public:
     // identified by struct_id.
     static ErlNifResourceType * register_ffi_struct_resource_type(ErlNifEnv *env, std::string &struct_id) {
         auto resource_type = enif_open_resource_type(
-          env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), resource_dtor,
+          env, "Elixir.Otter.Nif", ("OTTER_STRUCT_" + struct_id).data(), nullptr,
           ERL_NIF_RT_CREATE, nullptr);
         return resource_type;
     }
@@ -1493,7 +1491,7 @@ static ERL_NIF_TERM otter_invoke(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
 
 static int on_load(ErlNifEnv *env, void **, ERL_NIF_TERM) {
     ErlNifResourceType *rt;
-    rt = enif_open_resource_type(env, "Elixir.Otter.Nif", "OtterHandle", resource_dtor, ERL_NIF_RT_CREATE, nullptr);
+    rt = enif_open_resource_type(env, "Elixir.Otter.Nif", "OtterHandle", nullptr, ERL_NIF_RT_CREATE, nullptr);
     if (!rt) {
         return -1;
     }
