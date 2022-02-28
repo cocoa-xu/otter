@@ -57,6 +57,7 @@ jobs:
           export ERL="$(which erl)"
           export ERL_BASE="$(dirname $(dirname ${ERL}))"
           export ELREXEC="$(find "${ERL_BASE}" -name erlexec)"
+          export BEAM_SMP="$(find "${ERL_BASE}" -name beam.smp)"
           export BINDIR="$(dirname ${ELREXEC})"
           export START_BOOT="$(find $ERL_BASE -name start.boot | grep -v release)"
           export ROOTDIR="$(dirname $(dirname ${START_BOOT}))"
@@ -69,4 +70,4 @@ jobs:
           mix test || ls /tmp/core*
           bash ci/repeat-run-mix-test.sh || true
           ls /tmp/core*
-          gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" $ELREXEC /tmp/core.*
+          gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" $BEAM_SMP /tmp/core.*
